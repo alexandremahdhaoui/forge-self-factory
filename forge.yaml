@@ -1,0 +1,21 @@
+name: forge-self-factory
+
+artifactStorePath: .forge/artifact-store.yaml
+
+build:
+  # forge-ci.yaml and forge-factory.yaml are inputs, not generated output.
+  # The workspace root is not a git repo, so they live here and are placed
+  # there. place refuses a root that carries a different factory.
+  - name: place
+    src: ./workspace
+    engine: forge://generic-builder
+    spec:
+      command: sh
+      args: ["hack/place.sh", ".."]
+
+test:
+  - name: factory
+    runner: forge://generic-test-runner
+    spec:
+      command: sh
+      args: ["hack/factory-check.sh"]

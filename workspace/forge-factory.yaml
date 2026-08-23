@@ -1,0 +1,58 @@
+# What the forge-self workspace is made of.
+#
+# The toolchain lives under its own factory, so the model has no exceptions:
+# every forge and forge-* runnable declares this factory, and
+# forge-self-register carries the internal track each member resolves from.
+#
+# Every member keeps its go.mod and go.sum committed. That is what breaks
+# the bootstrap cycle: `go run <module>@<version>` works before any factory
+# or cache exists. No member declares a language, so sync generates no
+# manifest here and the committed files stand.
+version: "1"
+name: forge-self
+
+repos:
+  - name: forge
+    url: git@github.com:alexandremahdhaoui/forge.git
+
+  - name: forge-ci
+    url: git@github.com:alexandremahdhaoui/forge-ci.git
+
+  - name: forge-factory
+    url: git@github.com:alexandremahdhaoui/forge-factory.git
+
+  - name: forge-register
+    url: git@github.com:alexandremahdhaoui/forge-register.git
+
+  - name: forge-ci-spec
+    url: git@github.com:alexandremahdhaoui/forge-ci-spec.git
+
+  - name: forge-revision-spec
+    url: git@github.com:alexandremahdhaoui/forge-revision-spec.git
+
+  - name: forge-register-spec
+    url: git@github.com:alexandremahdhaoui/forge-register-spec.git
+
+  - name: forge-self-factory
+    url: git@github.com:alexandremahdhaoui/forge-self-factory.git
+
+  # The register instance. Its own pipeline writes it and nothing is
+  # generated into it.
+  - name: forge-self-register
+    url: git@github.com:alexandremahdhaoui/forge-self-register.git
+
+  # Where the pipeline records revisions and runs.
+  - name: forge-self-state
+    url: git@github.com:alexandremahdhaoui/forge-self-state.git
+
+register:
+  url: git@github.com:alexandremahdhaoui/forge-self-register.git
+
+engines:
+  - alias: go
+    engine: forge://github.com/alexandremahdhaoui/forge-factory/cmd/factory-lang-go
+
+state:
+  engine: forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-state-git
+  spec:
+    path: ./forge-self-state

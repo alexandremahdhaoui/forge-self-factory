@@ -1,0 +1,100 @@
+name: forge-self
+
+artifactStorePath: .forge-ci-self/artifact-store.yaml
+
+# Every toolchain member is listed so a minted revision pins each member's
+# sha. The publish step in forge-self-register reads that record: it is what
+# lets a remote run resolve a member with no version typed.
+repos:
+  - name: forge
+    url: git@github.com:alexandremahdhaoui/forge.git
+    ref: main
+  - name: forge-ci
+    url: git@github.com:alexandremahdhaoui/forge-ci.git
+    ref: main
+  - name: forge-factory
+    url: git@github.com:alexandremahdhaoui/forge-factory.git
+    ref: main
+  - name: forge-register
+    url: git@github.com:alexandremahdhaoui/forge-register.git
+    ref: main
+  - name: forge-ci-spec
+    url: git@github.com:alexandremahdhaoui/forge-ci-spec.git
+    ref: main
+  - name: forge-revision-spec
+    url: git@github.com:alexandremahdhaoui/forge-revision-spec.git
+    ref: main
+  - name: forge-register-spec
+    url: git@github.com:alexandremahdhaoui/forge-register-spec.git
+    ref: main
+  # The register the publish stage writes. Its index commits ride the state
+  # engine, so the tree stays clean and the loop settles.
+  - name: forge-self-register
+    url: git@github.com:alexandremahdhaoui/forge-self-register.git
+    ref: main
+
+managers:
+  - alias: local
+    engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-manager-local"
+    spec:
+      statePath: .forge-ci-self/manager-local.json
+
+engines:
+  - alias: here
+    type: compute
+    engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-compute-local"
+    manager: local
+
+  - alias: ci-state
+    type: state
+    engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-state-git"
+    manager: local
+    spec:
+      path: forge-self-state
+
+  - alias: on-change
+    type: trigger
+    engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-trigger-watch"
+    manager: local
+    spec:
+      watch: ["forge", "forge-ci", "forge-factory", "forge-register"]
+
+  - alias: all-pass
+    type: promotion
+    engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-promotion-all"
+    manager: local
+
+state: ci-state
+triggers: [on-change]
+
+targets:
+  - alias: gate
+    forge: test run unit
+    in: [forge-factory, forge-register]
+
+  - alias: publish-members
+    forge: test run publish-members
+    in: [forge-self-register]
+
+stages:
+  - name: build
+    # The revision is minted here, once the gate passes. The record carries
+    # every member's sha, which is what the publish stage hands to
+    # consumers as provenance.
+    mint: true
+    promotion: all-pass
+    substages:
+      - name: default
+        engine: here
+        manager: local
+        targets: [gate]
+
+  # Publish is the only door into the internal track: each member enters
+  # with the minted revision as provenance.
+  - name: publish
+    promotion: all-pass
+    substages:
+      - name: default
+        engine: here
+        manager: local
+        targets: [publish-members]
