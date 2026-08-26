@@ -32,6 +32,11 @@ repos:
   - name: forge-self-register
     url: git@github.com:alexandremahdhaoui/forge-self-register.git
     ref: main
+  # The factory itself: the aggregated dist release is created here, and a
+  # minted revision pins the workspace files too.
+  - name: forge-self-factory
+    url: git@github.com:alexandremahdhaoui/forge-self-factory.git
+    ref: main
 
 managers:
   - alias: local
@@ -64,6 +69,27 @@ engines:
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-promotion-all"
     manager: local
 
+  # The distribution door. Uncomment this engine and the `release: publish`
+  # line on the publish stage, with GITHUB_TOKEN exported (repo + contents
+  # scope) and api.github.com reachable. On green it tags every member with
+  # the next semver and creates ONE aggregated release per revision, tagged
+  # dist-<revision> in forge-self-factory: every cross-built binary from
+  # build/dist plus index.json pinning each binary's measured sha256.
+  # Consumers point FORGE_DIST_MIRROR (or sync --tooling-from) at
+  # https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+  # and the store verifies every byte against the index.
+  # - alias: dist-release
+  #   type: artifact
+  #   engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-artifact-release"
+  #   manager: local
+  #   spec:
+  #     releaseIn: forge-self-factory
+  #     assets:
+  #       - "forge/build/dist/*"
+  #       - "forge-ci/build/dist/*"
+  #       - "forge-factory/build/dist/*"
+  #       - "forge-register/build/dist/*"
+
 state: ci-state
 triggers: [on-change]
 
@@ -75,6 +101,12 @@ targets:
   - alias: publish-members
     forge: test run publish-members
     in: [forge-self-register]
+
+  # Cross-build every toolchain command for the distribution: CGO off,
+  # linux amd64+arm64, stamped with the revision through FORGE_CI_REVISION.
+  - alias: build-dist
+    forge: test run dist
+    in: [forge, forge-ci, forge-factory, forge-register]
 
 stages:
   - name: build
@@ -90,11 +122,18 @@ stages:
         targets: [gate]
 
   # Publish is the only door into the internal track: each member enters
-  # with the minted revision as provenance.
+  # with the minted revision as provenance. The dist substage cross-builds
+  # the whole toolchain alongside it, so the binaries the release would
+  # carry are proven on every run whether or not the release is active.
   - name: publish
     promotion: all-pass
+    # release: dist-release   # activate with the dist-release engine above
     substages:
       - name: default
         engine: here
         manager: local
         targets: [publish-members]
+      - name: dist
+        engine: here
+        manager: local
+        targets: [build-dist]
