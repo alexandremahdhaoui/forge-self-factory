@@ -78,17 +78,17 @@ engines:
   # Consumers point FORGE_DIST_MIRROR (or sync --tooling-from) at
   # https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
   # and the store verifies every byte against the index.
-  # - alias: dist-release
-  #   type: artifact
-  #   engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-artifact-release"
-  #   manager: local
-  #   spec:
-  #     releaseIn: forge-self-factory
-  #     assets:
-  #       - "forge/build/dist/*"
-  #       - "forge-ci/build/dist/*"
-  #       - "forge-factory/build/dist/*"
-  #       - "forge-register/build/dist/*"
+  - alias: dist-release
+    type: artifact
+    engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-artifact-release"
+    manager: local
+    spec:
+      releaseIn: forge-self-factory
+      assets:
+        - "forge/build/dist/*"
+        - "forge-ci/build/dist/*"
+        - "forge-factory/build/dist/*"
+        - "forge-register/build/dist/*"
 
 state: ci-state
 triggers: [on-change]
@@ -127,7 +127,7 @@ stages:
   # carry are proven on every run whether or not the release is active.
   - name: publish
     promotion: all-pass
-    # release: dist-release   # activate with the dist-release engine above
+    release: dist-release
     substages:
       - name: default
         engine: here
