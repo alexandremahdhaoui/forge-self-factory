@@ -51,14 +51,6 @@ managers:
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-manager-github"
     spec:
       statePath: .forge-ci-self/manager-github.json
-      # A PAT, not the token Actions injects. GitHub excludes the run's own
-      # ephemeral GITHUB_TOKEN from the secrets API entirely - no
-      # permissions: block grants it, on purpose, so a workflow cannot use
-      # its own token to rewrite or read back the secrets it runs under.
-      # Reconciling an actions-secret therefore needs a real PAT, and the
-      # default of GITHUB_TOKEN means one thing on a laptop and another in
-      # a runner. Naming it removes the ambiguity in both.
-      tokenEnv: WORKSPACE_TOKEN
 
 engines:
   - alias: here
