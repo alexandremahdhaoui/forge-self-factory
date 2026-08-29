@@ -10,6 +10,16 @@ set -eu
 # workspace. Refuse it: this checkout may sit inside another workspace, and
 # placing there would clobber it.
 
+# Run from the factory checkout, never from the directory above it. Every
+# source path below is relative to the current directory, so from one level up
+# each one misses, the loop copies nothing, and the closing line still claims
+# success. That silence hid a broken CI checkout for eight scheduled runs.
+[ -f "workspace/forge-factory.yaml" ] || {
+    echo "place: no workspace/forge-factory.yaml here." >&2
+    echo "place: run me from inside the factory checkout." >&2
+    exit 1
+}
+
 DEST="${1:-..}"
 
 if [ -f "$DEST/forge-factory.yaml" ] \
