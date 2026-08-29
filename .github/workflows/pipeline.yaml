@@ -49,6 +49,7 @@ jobs:
       - name: Run the toolchain pipeline
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKSPACE_TOKEN: ${{ secrets.WORKSPACE_TOKEN }}
         run: |
           forge-ci apply --config forge-ci.yaml --root .
 
