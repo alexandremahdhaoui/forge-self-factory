@@ -44,11 +44,82 @@ managers:
     spec:
       statePath: .forge-ci-self/manager-local.json
 
+  # Realizes the GitHub surface the actions engine declares: converged
+  # workflow files on this checkout, sealed Actions secrets, workflow
+  # enablement. It reads GITHUB_TOKEN from the environment (.envrc).
+  - alias: github
+    engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-manager-github"
+    spec:
+      statePath: .forge-ci-self/manager-github.json
+
 engines:
   - alias: here
     type: compute
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-compute-local"
     manager: local
+
+  # The GitHub surface. This workspace had none for its whole life: the
+  # toolchain's own pipeline ran only when somebody typed forge-ci apply on
+  # a laptop, while the golden workspace next door has run on a schedule and
+  # on member pushes since it was set up. Nothing said so, because an absent
+  # engine looks exactly like a working one.
+  #
+  # Bootstrap provisions the lot; every apply re-converges it, so a
+  # hand-edited workflow drifts back to this spec.
+  - alias: actions
+    type: compute
+    engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-compute-github"
+    manager: github
+    spec:
+      repo: alexandremahdhaoui/forge-self-factory
+      dir: forge-self-factory
+      setup:
+        - uses: actions/setup-go@v5
+          with:
+            go-version: "1.26"
+      workspace:
+        # One pinned binary stands the whole workspace up. Bump it when this
+        # pipeline republishes forge-factory, so the seed and the toolchain
+        # it builds agree.
+        bootstrapCommand: go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+        toolchainScript: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+      secrets:
+        # Reads every toolchain member and pushes the state repo; the
+        # release step needs contents:write on each member it tags.
+        - name: WORKSPACE_TOKEN
+          fromEnv: WORKSPACE_TOKEN
+      workflows:
+        - name: pipeline
+          kind: command
+          header: |
+            # The toolchain's own pipeline. It stands the workspace up, gates
+            # every member's suites, mints a revision pinning each sha,
+            # publishes each member into forge-self-register's internal track
+            # with that revision as provenance, and releases the aggregated
+            # distribution.
+            #
+            # member-pushed is the trigger a toolchain repo sends on push, so
+            # this costs nothing while nobody is pushing.
+          events: [member-pushed]
+          job: apply
+          stepName: Run the toolchain pipeline
+          secret: WORKSPACE_TOKEN
+          command: |
+            forge-ci apply --config forge-ci.yaml --root .
+        - name: release
+          kind: release
 
   - alias: ci-state
     type: state

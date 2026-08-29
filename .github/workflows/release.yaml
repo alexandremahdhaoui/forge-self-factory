@@ -1,0 +1,36 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: semver tag to publish
+        required: true
+      sha:
+        description: commit the tag points at
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          git config user.name "forge-release"
+          git config user.email "forge-release@users.noreply.github.com"
+          if ! git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            git tag -a "$TAG" -m "release $TAG" "$SHA"
+            git push origin "$TAG"
+          fi
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --generate-notes
+          fi
