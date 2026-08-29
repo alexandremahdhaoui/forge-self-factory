@@ -116,6 +116,13 @@ engines:
           job: apply
           stepName: Run the toolchain pipeline
           secret: WORKSPACE_TOKEN
+          # The release engines reach the outside world and nothing else
+          # hands them a credential: engines inherit forge-ci's environment
+          # and nothing more, and a sealed Actions secret puts nothing into
+          # a running job. token puts secrets.GITHUB_TOKEN into the step;
+          # packages grants the registry write the image push needs.
+          token: true
+          packages: true
           command: |
             forge-ci apply --config forge-ci.yaml --root .
         - name: release
@@ -140,12 +147,12 @@ engines:
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-promotion-all"
     manager: local
 
-  # The distribution door, live. It needs GITHUB_TOKEN exported (repo +
-  # contents scope) and api.github.com reachable. On green it tags every
-  # member with the next semver and creates ONE aggregated release per
-  # revision, tagged dist-<revision> in forge-self-factory: every cross-built
-  # binary the build recorded, plus index.json pinning each binary's
-  # measured sha256.
+  # The distribution door, live. It needs GITHUB_TOKEN in the environment
+  # and api.github.com reachable. On green it tags EVERY member with the one
+  # version the core decided, and creates ONE aggregated release under that
+  # same tag in forge-self-factory: every cross-built binary the build
+  # recorded, plus index.json pinning each binary's measured sha256 and the
+  # revision it was proven from.
   # Consumers point FORGE_DIST_MIRROR (or sync --tooling-from) at
   # https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
   # and the store verifies every byte against the index.
@@ -159,6 +166,21 @@ engines:
   # declares platforms:, each recorded as an artifact named
   # <name>_<os>_<arch>, and the release publishes exactly those records. A
   # repo's own tool declares no platform and never leaves its repo.
+
+  # The image door. It pushes to GHCR with the token Actions injects, so
+  # there is no secret to create, seal or rotate - the workflow declares
+  # packages: write and that is the whole credential story.
+  #
+  # No tag is named here: the tag is the version the core decided, so the
+  # image and the git tags carry one number. movingTags names conveniences
+  # that move on every release and are never something to pin.
+  - alias: dist-image
+    type: artifact
+    engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-artifact-container"
+    manager: local
+    spec:
+      image: ghcr.io/alexandremahdhaoui/forge
+      movingTags: [latest]
 
 state: ci-state
 triggers: [on-change]
@@ -177,6 +199,13 @@ targets:
   - alias: build-dist
     forge: test run dist
     in: [forge, forge-ci, forge-factory, forge-register]
+
+  # Assemble the toolchain image from what build-dist just cross-built. It
+  # runs in the factory because that is the one place the whole workspace is
+  # visible.
+  - alias: build-image
+    forge: test run image
+    in: [forge-self-factory]
 
 stages:
   - name: build
@@ -207,3 +236,16 @@ stages:
         engine: here
         manager: local
         targets: [build-dist]
+
+  # The image is its own stage because a stage carries ONE release, and this
+  # publishes to a registry rather than to GitHub releases. It runs after
+  # publish, so the binaries it packs are the ones that stage proved, and a
+  # registry that is down cannot hold up the binary release.
+  - name: image
+    promotion: all-pass
+    release: dist-image
+    substages:
+      - name: default
+        engine: here
+        manager: local
+        targets: [build-image]

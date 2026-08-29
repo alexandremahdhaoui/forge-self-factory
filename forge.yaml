@@ -3,7 +3,7 @@ name: forge-self-factory
 artifactStorePath: .forge/artifact-store.yaml
 
 build:
-  # This repo builds no artifact. It owns the workspace files, and `forge
+  # This repo builds no binary. It owns the workspace files, and `forge
   # clone` places them: one command that stands a workspace up from the
   # factory URL, with no working directory to get wrong.
   - name: noop
@@ -12,9 +12,61 @@ build:
     spec:
       command: "true"
 
+  # The toolchain image: every command the members cross-built, on a base,
+  # so a CI job runs the toolchain instead of building it. That is what
+  # deletes the toolchainScript, and with it the `cd forge` that failed
+  # eight scheduled runs in a row.
+  #
+  # It is built HERE because this is where the whole workspace is visible.
+  # No Containerfile and no daemon: there is not one RUN step in it, so it
+  # is layer assembly, and multi-architecture costs one layer set per
+  # architecture plus an index.
+  - name: toolchain
+    src: .
+    dest: ./build/images
+    engine: forge://container-build-simple
+    spec:
+      # glibc and a real shell, for the runner's benefit rather than ours:
+      # the binaries are CGO_ENABLED=0 and would run on scratch. musl breaks
+      # JavaScript actions in edge cases and every `uses:` step is one, and
+      # alpine job containers are x64 only, which would silently drop the
+      # arm64 half.
+      base: debian:stable-slim
+      binDir: /usr/local/bin
+      platforms: [linux/amd64, linux/arm64]
+      # What the dist stage cross-built, in every member. Each build entry
+      # names its own dest:, and every one of them is build/bin - the "dist"
+      # in the stage name is what it is FOR, not where it lands.
+      #
+      # A glob that matches nothing fails the build, so a member that
+      # stopped producing binaries is loud rather than an image quietly
+      # missing a tool.
+      from:
+        - "../forge/build/bin/*_linux_amd64"
+        - "../forge/build/bin/*_linux_arm64"
+        - "../forge-ci/build/bin/*_linux_amd64"
+        - "../forge-ci/build/bin/*_linux_arm64"
+        - "../forge-factory/build/bin/*_linux_amd64"
+        - "../forge-factory/build/bin/*_linux_arm64"
+        - "../forge-register/build/bin/*_linux_amd64"
+        - "../forge-register/build/bin/*_linux_arm64"
+      labels:
+        org.opencontainers.image.source: https://github.com/alexandremahdhaoui/forge-self-factory
+        org.opencontainers.image.description: The forge toolchain. Every command, on debian.
+        org.opencontainers.image.licenses: Apache-2.0
+
 test:
   - name: factory
     runner: forge://generic-test-runner
     spec:
       command: sh
       args: ["hack/factory-check.sh"]
+
+  # The image is built by a test stage for the same reason the binaries are:
+  # a pipeline target names a forge stage, and the stage is what the
+  # substage fans out to.
+  - name: image
+    runner: forge://generic-test-runner
+    spec:
+      command: forge
+      args: ["build", "toolchain"]
