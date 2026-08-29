@@ -51,7 +51,7 @@ managers:
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-manager-github"
     spec:
       statePath: .forge-ci-self/manager-github.json
-      tokenEnv: FACTORY_TOKEN
+      tokenEnv: FORGE_CI_GITHUB_TOKEN
 
 engines:
   - alias: here
@@ -99,8 +99,8 @@ engines:
       secrets:
         # Reads every toolchain member and pushes the state repo; the
         # release step needs contents:write on each member it tags.
-        - name: FACTORY_TOKEN
-          fromEnv: FACTORY_TOKEN
+        - name: FORGE_CI_GITHUB_TOKEN
+          fromEnv: FORGE_CI_GITHUB_TOKEN
       workflows:
         - name: pipeline
           kind: command
@@ -116,7 +116,7 @@ engines:
           events: [member-pushed]
           job: apply
           stepName: Run the toolchain pipeline
-          secret: FACTORY_TOKEN
+          secret: FORGE_CI_GITHUB_TOKEN
           # The release engines reach the outside world and nothing else
           # hands them a credential: engines inherit forge-ci's environment
           # and nothing more, and a sealed Actions secret puts nothing into

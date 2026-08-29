@@ -28,7 +28,7 @@ jobs:
 
       - name: Check out the workspace around this repo
         run: |
-          git config --global url."https://x-access-token:${{ secrets.FACTORY_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
           go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
 
       - name: Install the toolchain from the workspace
@@ -49,7 +49,7 @@ jobs:
       - name: Run the toolchain pipeline
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FACTORY_TOKEN: ${{ secrets.FACTORY_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
           forge-ci apply --config forge-ci.yaml --root .
 
