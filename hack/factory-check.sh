@@ -14,12 +14,16 @@ fi
 
 for f in forge-factory.yaml forge-ci.yaml; do
     if [ ! -f "$ROOT/$f" ]; then
-        echo "no $f at $ROOT. run: forge build place" >&2
+        echo "no $f at $ROOT." >&2
+        echo "  from nothing:   forge clone <this factory's url> $ROOT" >&2
+        echo "  after editing:  pass --config workspace/$f to forge-factory" >&2
         exit 1
     fi
 
     if ! cmp -s "workspace/$f" "$ROOT/$f"; then
-        echo "$f here and the one in play disagree. run: forge build place" >&2
+        echo "$f here and the one in play disagree." >&2
+        echo "  from nothing:   forge clone <this factory's url> $ROOT" >&2
+        echo "  after editing:  pass --config workspace/$f to forge-factory" >&2
         diff -u "workspace/$f" "$ROOT/$f" >&2 || true
         exit 1
     fi
