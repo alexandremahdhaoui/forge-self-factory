@@ -69,12 +69,12 @@ engines:
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-promotion-all"
     manager: local
 
-  # The distribution door. Uncomment this engine and the `release: publish`
-  # line on the publish stage, with GITHUB_TOKEN exported (repo + contents
-  # scope) and api.github.com reachable. On green it tags every member with
-  # the next semver and creates ONE aggregated release per revision, tagged
-  # dist-<revision> in forge-self-factory: every cross-built binary the
-  # build recorded, plus index.json pinning each binary's measured sha256.
+  # The distribution door, live. It needs GITHUB_TOKEN exported (repo +
+  # contents scope) and api.github.com reachable. On green it tags every
+  # member with the next semver and creates ONE aggregated release per
+  # revision, tagged dist-<revision> in forge-self-factory: every cross-built
+  # binary the build recorded, plus index.json pinning each binary's
+  # measured sha256.
   # Consumers point FORGE_DIST_MIRROR (or sync --tooling-from) at
   # https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
   # and the store verifies every byte against the index.
