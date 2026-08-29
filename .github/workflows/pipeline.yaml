@@ -16,6 +16,7 @@ on:
 permissions:
   contents: write
   issues: write
+  packages: write
 
 jobs:
   apply:
@@ -46,6 +47,8 @@ jobs:
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
       - name: Run the toolchain pipeline
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           forge-ci apply --config forge-ci.yaml --root .
 
