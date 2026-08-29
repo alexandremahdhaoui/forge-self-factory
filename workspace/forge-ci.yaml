@@ -136,12 +136,33 @@ engines:
     spec:
       path: forge-self-state
 
+  # The watch list is the one membership statement that matters here: it
+  # decides what counts as a move, and it declares the workflow that makes a
+  # move visible. Nothing on GitHub starts a workflow in this repo when a
+  # member moves, so every watched repo carries a generated notify workflow
+  # that sends the dispatch. One list, so the trigger and the notifier can
+  # never disagree.
+  #
+  # The register and the state repo are absent on purpose: this pipeline
+  # writes both on every run, so a notify there would never settle.
   - alias: on-change
     type: trigger
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-trigger-watch"
-    manager: local
+    manager: github
     spec:
-      watch: ["forge", "forge-ci", "forge-factory", "forge-register"]
+      watch:
+        - forge
+        - forge-ci
+        - forge-factory
+        - forge-register
+        - forge-ci-spec
+        - forge-revision-spec
+        - forge-register-spec
+      notify:
+        owner: alexandremahdhaoui
+        factory: forge-self-factory
+        eventType: member-pushed
+        secret: FORGE_CI_DISPATCH_TOKEN
 
   - alias: all-pass
     type: promotion
