@@ -56,12 +56,9 @@ jobs:
       - name: Say that the run failed
         if: failure()
         env:
-          GH_TOKEN: ${{ github.token }}
-          TITLE: "pipeline is failing"
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$TITLE in:title" --json number --jq length)
-          if [ "$open" -gt 0 ]; then
-            echo "an issue is already open for this; not filing another"
-            exit 0
-          fi
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one."
+          forge-ci report-failure \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "pipeline is failing" \
+            --body "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one."

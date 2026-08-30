@@ -114,6 +114,9 @@ engines:
             # member-pushed is the trigger a toolchain repo sends on push, so
             # this costs nothing while nobody is pushing.
           events: [member-pushed]
+          # A dispatched or scheduled run has no audience here: whoever caused
+          # it is watching another repo's checks, or nobody typed it at all.
+          reportFailure: true
           job: apply
           stepName: Run the toolchain pipeline
           secret: FORGE_CI_GITHUB_TOKEN
@@ -128,6 +131,9 @@ engines:
             forge-ci apply --config forge-ci.yaml --root .
         - name: release
           kind: release
+          # It stands the workspace up to reach the toolchain, and that clone
+          # reaches private members.
+          secret: FORGE_CI_GITHUB_TOKEN
 
   - alias: ci-state
     type: state
@@ -183,7 +189,7 @@ engines:
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-artifact-release"
     manager: local
     spec:
-      releaseIn: forge-self-factory
+      repo: alexandremahdhaoui/forge-self-factory
   # No assets glob: the dist stage builds every command whose build entry
   # declares platforms:, each recorded as an artifact named
   # <name>_<os>_<arch>, and the release publishes exactly those records. A
