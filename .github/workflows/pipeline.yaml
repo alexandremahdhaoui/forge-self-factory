@@ -56,9 +56,19 @@ jobs:
       - name: Say that the run failed
         if: failure()
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          TOKEN: ${{ github.token }}
+          TITLE: "pipeline is failing"
         run: |
-          forge-ci report-failure \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "pipeline is failing" \
-            --body "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one."
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
