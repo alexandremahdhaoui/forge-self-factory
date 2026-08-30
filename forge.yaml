@@ -26,12 +26,21 @@ build:
     dest: ./build/images
     engine: forge://container-build-simple
     spec:
-      # glibc and a real shell, for the runner's benefit rather than ours:
-      # the binaries are CGO_ENABLED=0 and would run on scratch. musl breaks
-      # JavaScript actions in edge cases and every `uses:` step is one, and
-      # alpine job containers are x64 only, which would silently drop the
-      # arm64 half.
-      base: debian:stable-slim
+      # glibc, a real shell, and git.
+      #
+      # The binaries are CGO_ENABLED=0 and would run on scratch, so the first
+      # reading of this was that the base exists only for the runner: musl
+      # breaks JavaScript actions in edge cases and every `uses:` step is
+      # one, and alpine job containers are x64 only, which would silently
+      # drop the arm64 half. All true, and all beside the point.
+      #
+      # The toolchain SHELLS OUT. gitadapter runs git for every revision,
+      # every state commit and every tag, and the generated checkout step
+      # runs `git config` before anything else. debian:stable-slim ships no
+      # git, so a job in it died on `git: not found`, exit 127, before the
+      # workspace existed. The -scm variant is the same Debian with git,
+      # curl and ssh, which is the whole reason that variant exists.
+      base: buildpack-deps:stable-scm
       binDir: /usr/local/bin
       platforms: [linux/amd64, linux/arm64]
       # What the dist stage cross-built, in every member. Each build entry
