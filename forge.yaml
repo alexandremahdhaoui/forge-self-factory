@@ -12,6 +12,48 @@ build:
     spec:
       command: "true"
 
+  # git-lfs rides the image beside the forge tools. ci-state-git grew
+  # spec.lfs - kinds whose payloads ride git LFS, the dependency-lock
+  # records being the intended first user - and the engine fails loud
+  # naming git-lfs when the runner lacks it. container-build-simple has no
+  # RUN step, so the binary arrives the way every tool does: as a built
+  # artifact the image layer globs. Pure Go, CGO off, so it is static like
+  # the rest of the layer.
+  #
+  # The version is pinned here verbatim, like this factory's other pins:
+  # forge-self declares no dependencies block, so nothing resolves from a
+  # register. go install lands a cross build under GOPATH/bin/<os>_<arch>
+  # and a native one directly in GOPATH/bin, so the copy tries both.
+  - name: git-lfs_linux_amd64
+    src: .
+    dest: ./build/bin
+    engine: forge://generic-builder
+    spec:
+      command: sh
+      args:
+        - "-c"
+        - >-
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0
+          go install github.com/git-lfs/git-lfs/v3@v3.8.0 &&
+          p="$(go env GOPATH)/bin/linux_amd64/git-lfs" &&
+          { [ -f "$p" ] || p="$(go env GOPATH)/bin/git-lfs"; } &&
+          install -D -m 0755 "$p" build/bin/git-lfs_linux_amd64
+
+  - name: git-lfs_linux_arm64
+    src: .
+    dest: ./build/bin
+    engine: forge://generic-builder
+    spec:
+      command: sh
+      args:
+        - "-c"
+        - >-
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0
+          go install github.com/git-lfs/git-lfs/v3@v3.8.0 &&
+          p="$(go env GOPATH)/bin/linux_arm64/git-lfs" &&
+          { [ -f "$p" ] || p="$(go env GOPATH)/bin/git-lfs"; } &&
+          install -D -m 0755 "$p" build/bin/git-lfs_linux_arm64
+
   # The toolchain image: every command the members cross-built, on a base,
   # so a CI job runs the toolchain instead of building it. That is what
   # deletes the toolchainScript, and with it the `cd forge` that failed
@@ -51,6 +93,8 @@ build:
       # stopped producing binaries is loud rather than an image quietly
       # missing a tool.
       from:
+        - "./build/bin/git-lfs_linux_amd64"
+        - "./build/bin/git-lfs_linux_arm64"
         - "../forge/build/bin/*_linux_amd64"
         - "../forge/build/bin/*_linux_arm64"
         - "../forge-ci/build/bin/*_linux_amd64"
