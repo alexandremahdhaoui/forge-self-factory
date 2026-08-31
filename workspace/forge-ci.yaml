@@ -246,6 +246,11 @@ stages:
       - name: default
         engine: here
         manager: local
+        # This factory's members declare no languages and no dependencies,
+        # so the convergence writes nothing and locks nothing - it is here
+        # because a multi-repo pipeline that never syncs is refused by
+        # forge-ci validate, and the rule is structural on purpose.
+        sync: true
         targets: [gate]
 
   # Publish is the only door into the internal track: each member enters
