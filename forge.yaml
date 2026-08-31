@@ -118,8 +118,13 @@ test:
   # The image is built by a test stage for the same reason the binaries are:
   # a pipeline target names a forge stage, and the stage is what the
   # substage fans out to.
+  #
+  # It builds every artifact, not `toolchain` alone: the image's from:
+  # globs read this repo's own build/bin, and naming one artifact skipped
+  # the git-lfs entries that feed it - run 641e4ae6d312 died on
+  # "a from glob matched nothing" exactly that way.
   - name: image
     runner: forge://generic-test-runner
     spec:
       command: forge
-      args: ["build", "toolchain"]
+      args: ["build"]
