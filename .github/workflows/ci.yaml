@@ -32,6 +32,14 @@ jobs:
         with:
           go-version: "1.26"
 
+      - name: Restore the tool store
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            tool-store-${{ runner.os }}-
+
       - name: Check out the workspace around this repo
         run: |
           git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
@@ -58,6 +66,19 @@ jobs:
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
           forge-ci apply --config forge-ci.yaml --root .
+
+      - name: Name the tool store by its content
+        id: tool-store-key
+        if: always()
+        run: |
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the tool store
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
 
       - name: Say that the run failed
         if: failure()
