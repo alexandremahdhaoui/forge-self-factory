@@ -1,0 +1,80 @@
+# The toolchain's own pipeline. It stands the workspace up, gates
+# every member's suites, mints a revision pinning each sha,
+# publishes each member into forge-self-register's internal track
+# with that revision as provenance, and releases the aggregated
+# distribution.
+#
+# member-pushed is the trigger a toolchain repo sends on push, so
+# this costs nothing while nobody is pushing.
+name: ci
+
+on:
+  repository_dispatch:
+    types: [member-pushed]
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Check out the workspace around this repo
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Install the toolchain from the workspace
+        run: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Run the toolchain pipeline
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
+        run: |
+          forge-ci apply --config forge-ci.yaml --root .
+
+      - name: Say that the run failed
+        if: failure()
+        env:
+          TOKEN: ${{ github.token }}
+          TITLE: "ci is failing"
+        run: |
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
