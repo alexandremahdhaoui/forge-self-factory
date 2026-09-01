@@ -102,7 +102,7 @@ engines:
         - name: FORGE_CI_GITHUB_TOKEN
           fromEnv: FORGE_CI_GITHUB_TOKEN
       workflows:
-        - name: pipeline
+        - name: ci
           kind: command
           header: |
             # The toolchain's own pipeline. It stands the workspace up, gates
@@ -114,6 +114,10 @@ engines:
             # member-pushed is the trigger a toolchain repo sends on push, so
             # this costs nothing while nobody is pushing.
           events: [member-pushed]
+          # A settle's own push must fire the superseding run, exactly as
+          # golden's does: without this, a regenerated workflow waited for
+          # the next member push to take effect.
+          pushBranches: [main]
           # A dispatched or scheduled run has no audience here: whoever caused
           # it is watching another repo's checks, or nobody typed it at all.
           reportFailure: true
