@@ -124,12 +124,10 @@ engines:
           job: apply
           stepName: Run the toolchain pipeline
           secret: FORGE_CI_GITHUB_TOKEN
-          # The release engines reach the outside world and nothing else
-          # hands them a credential: engines inherit forge-ci's environment
-          # and nothing more, and a sealed Actions secret puts nothing into
-          # a running job. token puts secrets.GITHUB_TOKEN into the step;
-          # packages grants the registry write the image push needs.
-          token: true
+          # The release engines name their credential in their own spec
+          # (tokenEnv: FORGE_CI_GITHUB_TOKEN), so the step carries no
+          # secrets.GITHUB_TOKEN. packages stays: it is the workflow
+          # permission, harmless while the engines use the PAT.
           packages: true
           command: |
             forge-ci apply --config forge-ci.yaml --root .
@@ -194,6 +192,7 @@ engines:
     manager: local
     spec:
       repo: alexandremahdhaoui/forge-self-factory
+      tokenEnv: FORGE_CI_GITHUB_TOKEN
   # No assets glob: the dist stage builds every command whose build entry
   # declares platforms:, each recorded as an artifact named
   # <name>_<os>_<arch>, and the release publishes exactly those records. A
@@ -213,6 +212,8 @@ engines:
     spec:
       image: ghcr.io/alexandremahdhaoui/forge
       movingTags: [latest]
+      # The GHCR push needs a token whose PAT carries packages write.
+      tokenEnv: FORGE_CI_GITHUB_TOKEN
 
 state: ci-state
 triggers: [on-change]
