@@ -124,10 +124,13 @@ engines:
           job: apply
           stepName: Run the toolchain pipeline
           secret: FORGE_CI_GITHUB_TOKEN
-          # The release engines name their credential in their own spec
-          # (tokenEnv: FORGE_CI_GITHUB_TOKEN), so the step carries no
-          # secrets.GITHUB_TOKEN. packages stays: it is the workflow
-          # permission, harmless while the engines use the PAT.
+          # Each release engine names its credential in its own spec. The
+          # binary release uses the PAT; the image push uses the per-run
+          # Actions token, because GHCR takes only that token or a classic
+          # PAT with write:packages, and the PAT here is fine-grained. token
+          # puts secrets.GITHUB_TOKEN into the step; packages grants it the
+          # registry write.
+          token: true
           packages: true
           command: |
             forge-ci apply --config forge-ci.yaml --root .
@@ -212,8 +215,10 @@ engines:
     spec:
       image: ghcr.io/alexandremahdhaoui/forge
       movingTags: [latest]
-      # The GHCR push needs a token whose PAT carries packages write.
-      tokenEnv: FORGE_CI_GITHUB_TOKEN
+      # GHCR accepts the per-run Actions token or a classic PAT with
+      # write:packages; a fine-grained PAT has no packages capability, so
+      # this engine reads the token the workflow's token: true injects.
+      tokenEnv: GITHUB_TOKEN
 
 state: ci-state
 triggers: [on-change]
