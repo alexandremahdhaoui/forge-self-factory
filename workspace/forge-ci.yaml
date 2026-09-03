@@ -96,6 +96,14 @@ engines:
           #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
           #   forge-factory sync --config forge-factory.yaml --root .
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+      # One apply as jobs: self-reconcile, evaluate, one per substage with
+      # a promotion job per stage, release. A failure shows where it
+      # happened and the image layout crosses from the image job to the
+      # release job as an Actions artifact. Every job stands the workspace
+      # up and builds the toolchain from source on its own, which is the
+      # cost of seeing each substage on a pipeline that runs no image.
+      phases: true
+      jobs: substage
       secrets:
         # Reads every toolchain member and pushes the state repo; the
         # release step needs contents:write on each member it tags.
