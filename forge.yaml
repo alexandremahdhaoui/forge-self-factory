@@ -131,7 +131,7 @@ test:
   # globs read this repo's own build/bin, and naming one artifact skipped
   # the git-lfs entries that feed it - run 641e4ae6d312 died on
   # "a from glob matched nothing" exactly that way.
-  - name: image
+  - name: package-container
     runner: forge://generic-test-runner
     spec:
       command: forge

@@ -96,12 +96,15 @@ engines:
           #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
           #   forge-factory sync --config forge-factory.yaml --root .
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
-      # One apply as jobs: self-reconcile, evaluate, one per substage with
-      # a promotion job per stage, release. A failure shows where it
-      # happened and the image layout crosses from the image job to the
-      # release job as an Actions artifact. Every job stands the workspace
-      # up and builds the toolchain from source on its own, which is the
-      # cost of seeing each substage on a pipeline that runs no image.
+      # One apply as jobs: self-reconcile, evaluate, then one per substage
+      # with a promotion job per stage. There is no release job - a release
+      # is a substage, so the jobs that publish are stage jobs like any
+      # other. A failure shows where it happened, and what a stage built
+      # crosses to the stages after it as an Actions artifact: the image
+      # layout the package stage assembles is what the release stage pushes.
+      # Every job stands the workspace up and builds the toolchain from
+      # source on its own, which is the cost of seeing each substage on a
+      # pipeline that runs no image.
       phases: true
       jobs: substage
       secrets:
@@ -197,7 +200,7 @@ engines:
   # Consumers point FORGE_DIST_MIRROR (or sync --tooling-from) at
   # https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
   # and the store verifies every byte against the index.
-  - alias: dist-release
+  - alias: release-artifacts
     type: artifact
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-artifact-release"
     manager: local
@@ -216,7 +219,7 @@ engines:
   # No tag is named here: the tag is the version the core decided, so the
   # image and the git tags carry one number. movingTags names conveniences
   # that move on every release and are never something to pin.
-  - alias: dist-image
+  - alias: release-container
     type: artifact
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-artifact-container"
     manager: local
@@ -232,36 +235,48 @@ state: ci-state
 triggers: [on-change]
 
 targets:
-  - alias: gate
+  # Every repo this factory publishes runs its own unit stage. It ran in two
+  # of the four, so the release shipped executables from forge and forge-ci
+  # that this pipeline had never tested.
+  - alias: unit
     forge: test run unit
-    in: [forge-factory, forge-register]
+    in: [forge, forge-ci, forge-factory, forge-register]
 
-  - alias: publish-members
+  - alias: publish-revision
     forge: test run publish-members
     in: [forge-self-register]
 
   # Cross-build every toolchain command for the distribution: CGO off,
   # linux amd64+arm64, stamped with the revision through FORGE_CI_REVISION.
-  - alias: build-dist
-    forge: test run dist
+  - alias: build-artifacts
+    forge: test run build-artifacts
     in: [forge, forge-ci, forge-factory, forge-register]
 
-  # Assemble the toolchain image from what build-dist just cross-built. It
+  # Assemble the toolchain image from what the build stage cross-built. It
   # runs in the factory because that is the one place the whole workspace is
   # visible.
-  - alias: build-image
-    forge: test run image
+  - alias: package-container
+    forge: test run package-container
     in: [forge-self-factory]
 
+# Test, then build, then package, then release. Stage order is the only
+# ordering this pipeline has: the loop stops at the first stage that does not
+# advance, so nothing is packed that did not cross-build and nothing is
+# published that did not pack.
+#
+# Substages of ONE stage run at the same time, which is why the two releases
+# live in a stage of their own rather than beside the build: a publishing
+# substage next to a building one would publish while the build was still
+# running and read none of what it made.
+#
+# The revision is not minted here. The evaluate phase mints it before the
+# first stage, because it is the run's identity rather than its verdict, and
+# it is what publish-revision hands consumers as provenance.
 stages:
-  - name: build
-    # The revision is minted here, once the gate passes. The record carries
-    # every member's sha, which is what the publish stage hands to
-    # consumers as provenance.
-    mint: true
+  - name: test
     promotion: all-pass
     substages:
-      - name: default
+      - name: unit
         engine: here
         manager: local
         # This factory's members declare no languages and no dependencies,
@@ -269,34 +284,52 @@ stages:
         # because a multi-repo pipeline that never syncs is refused by
         # forge-ci validate, and the rule is structural on purpose.
         sync: true
-        targets: [gate]
+        targets: [unit]
 
-  # Publish is the only door into the internal track: each member enters
-  # with the minted revision as provenance. The dist substage cross-builds
-  # the whole toolchain alongside it, so the binaries the release would
-  # carry are proven on every run whether or not the release is active.
-  - name: publish
+  # The executables the release ships and the image packs.
+  - name: build
     promotion: all-pass
-    release: dist-release
     substages:
-      - name: default
+      - name: build-artifacts
         engine: here
         manager: local
-        targets: [publish-members]
-      - name: dist
-        engine: here
-        manager: local
-        targets: [build-dist]
+        sync: true
+        targets: [build-artifacts]
 
-  # The image is its own stage because a stage carries ONE release, and this
-  # publishes to a registry rather than to GitHub releases. It runs after
-  # publish, so the binaries it packs are the ones that stage proved, and a
-  # registry that is down cannot hold up the binary release.
-  - name: image
+  # Packaging follows building. The image is assembled here and pushed in
+  # the release stage, so an assembly that fails costs no tag and a registry
+  # that is down cannot hold up the binary release.
+  - name: package
     promotion: all-pass
-    release: dist-image
     substages:
-      - name: default
+      - name: package-container
         engine: here
         manager: local
-        targets: [build-image]
+        sync: true
+        targets: [package-container]
+
+  # Three publishes, declared the same way anything else is.
+  #
+  # release-artifacts is FIRST on purpose: the core reads the first artifact
+  # engine in stage then substage order for the repo the version line lives
+  # in and for the members the release leaves alone. release-container names
+  # no repo - it pushes to a registry and tags nothing - so listing it first
+  # would put the version line at the factory root, which is not a repo.
+  - name: release
+    promotion: all-pass
+    substages:
+      - name: release-artifacts
+        engine: release-artifacts
+        manager: local
+      - name: release-container
+        engine: release-container
+        manager: local
+      # The only door into the register's internal track: each member enters
+      # with this revision as provenance. It runs beside the two releases, so
+      # the catalog write and the tagging race - today's behaviour, recorded
+      # in FOLLOWUP, and fixed by moving this into a stage of its own after
+      # them.
+      - name: publish-revision
+        engine: here
+        manager: local
+        targets: [publish-revision]
