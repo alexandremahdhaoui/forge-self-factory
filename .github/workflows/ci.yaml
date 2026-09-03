@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   self-reconcile:
+    name: Reconcile CI resources
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-go@v5
@@ -101,9 +102,11 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
             -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
   evaluate:
+    name: Evaluate next steps
     needs: [self-reconcile]
     outputs:
       outcome: ${{ steps.phase.outputs.outcome }}
+      revision: ${{ steps.phase.outputs.revision }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-go@v5
@@ -147,6 +150,7 @@ jobs:
           out=$(forge-ci apply --config forge-ci.yaml --root . --phase evaluate)
           printf '%s\n' "$out"
           echo "outcome=$(printf '%s\n' "$out" | sed -n 's/^evaluate: //p' | tail -n 1)" >> "$GITHUB_OUTPUT"
+          echo "revision=$(printf '%s\n' "$out" | sed -n 's/^revision //p' | head -n 1)" >> "$GITHUB_OUTPUT"
 
       - name: Name the tool store by its content
         id: tool-store-key
@@ -181,6 +185,7 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
             -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
   build-default:
+    name: build › default
     needs: [evaluate]
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
@@ -223,7 +228,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
-          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage build --substage default
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage build --substage default --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Keep what this job built for the release job
         uses: actions/upload-artifact@v4
@@ -265,7 +270,8 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
             -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
-  build-promote:
+  build-promotion-gate:
+    name: build › promotion gate
     needs: [evaluate, build-default]
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
@@ -302,13 +308,13 @@ jobs:
           #   forge-factory sync --config forge-factory.yaml --root .
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
-      - name: Promote stage build
+      - name: Promotion gate for stage build
         id: phase
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
-          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage build --promote
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage build --promote --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Name the tool store by its content
         id: tool-store-key
@@ -343,7 +349,8 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
             -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
   publish-default:
-    needs: [evaluate, build-promote]
+    name: publish › default
+    needs: [evaluate, build-promotion-gate]
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
@@ -385,7 +392,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
-          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --substage default
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --substage default --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Keep what this job built for the release job
         uses: actions/upload-artifact@v4
@@ -428,7 +435,8 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
             -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
   publish-dist:
-    needs: [evaluate, build-promote]
+    name: publish › dist
+    needs: [evaluate, build-promotion-gate]
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
@@ -470,7 +478,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
-          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --substage dist
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --substage dist --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Keep what this job built for the release job
         uses: actions/upload-artifact@v4
@@ -512,7 +520,8 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
             -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
-  publish-promote:
+  publish-promotion-gate:
+    name: publish › promotion gate
     needs: [evaluate, publish-default, publish-dist]
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
@@ -549,13 +558,13 @@ jobs:
           #   forge-factory sync --config forge-factory.yaml --root .
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
-      - name: Promote stage publish
+      - name: Promotion gate for stage publish
         id: phase
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
-          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --promote
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --promote --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Name the tool store by its content
         id: tool-store-key
@@ -590,7 +599,8 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
             -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
   image-default:
-    needs: [evaluate, publish-promote]
+    name: image › default
+    needs: [evaluate, publish-promotion-gate]
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
@@ -632,7 +642,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
-          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage image --substage default
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage image --substage default --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Keep what this job built for the release job
         uses: actions/upload-artifact@v4
@@ -674,7 +684,8 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
             -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
-  image-promote:
+  image-promotion-gate:
+    name: image › promotion gate
     needs: [evaluate, image-default]
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
@@ -711,13 +722,13 @@ jobs:
           #   forge-factory sync --config forge-factory.yaml --root .
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
-      - name: Promote stage image
+      - name: Promotion gate for stage image
         id: phase
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
-          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage image --promote
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage image --promote --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Name the tool store by its content
         id: tool-store-key
@@ -752,7 +763,8 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
             -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
   release:
-    needs: [evaluate, image-promote]
+    name: Release
+    needs: [evaluate, image-promotion-gate]
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
@@ -801,7 +813,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
-          forge-ci apply --config forge-ci.yaml --root . --phase release
+          forge-ci apply --config forge-ci.yaml --root . --phase release --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Name the tool store by its content
         id: tool-store-key
