@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  apply:
+  self-reconcile:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-go@v5
@@ -60,12 +60,748 @@ jobs:
           #   forge-factory sync --config forge-factory.yaml --root .
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
-      - name: Run the toolchain pipeline
+      - name: Reconcile CI resources
+        id: phase
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
-          forge-ci apply --config forge-ci.yaml --root .
+          forge-ci apply --config forge-ci.yaml --root . --phase self-reconcile
+
+      - name: Name the tool store by its content
+        id: tool-store-key
+        if: always()
+        run: |
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the tool store
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
+
+      - name: Say that the run failed
+        if: failure()
+        env:
+          TOKEN: ${{ github.token }}
+          TITLE: "ci is failing"
+        run: |
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
+  evaluate:
+    needs: [self-reconcile]
+    outputs:
+      outcome: ${{ steps.phase.outputs.outcome }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Restore the tool store
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            tool-store-${{ runner.os }}-
+
+      - name: Check out the workspace around this repo
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Install the toolchain from the workspace
+        run: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Evaluate next steps
+        id: phase
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
+        run: |
+          out=$(forge-ci apply --config forge-ci.yaml --root . --phase evaluate)
+          printf '%s\n' "$out"
+          echo "outcome=$(printf '%s\n' "$out" | sed -n 's/^evaluate: //p' | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Name the tool store by its content
+        id: tool-store-key
+        if: always()
+        run: |
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the tool store
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
+
+      - name: Say that the run failed
+        if: failure()
+        env:
+          TOKEN: ${{ github.token }}
+          TITLE: "ci is failing"
+        run: |
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
+  build-default:
+    needs: [evaluate]
+    if: needs.evaluate.outputs.outcome == 'proceed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Restore the tool store
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            tool-store-${{ runner.os }}-
+
+      - name: Check out the workspace around this repo
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Install the toolchain from the workspace
+        run: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Run build default
+        id: phase
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
+        run: |
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage build --substage default
+
+      - name: Keep what this job built for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-${{ github.run_id }}-build-default
+          path: .forge-ci/artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Name the tool store by its content
+        id: tool-store-key
+        if: always()
+        run: |
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the tool store
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
+
+      - name: Say that the run failed
+        if: failure()
+        env:
+          TOKEN: ${{ github.token }}
+          TITLE: "ci is failing"
+        run: |
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
+  build-promote:
+    needs: [evaluate, build-default]
+    if: needs.evaluate.outputs.outcome == 'proceed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Restore the tool store
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            tool-store-${{ runner.os }}-
+
+      - name: Check out the workspace around this repo
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Install the toolchain from the workspace
+        run: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Promote stage build
+        id: phase
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
+        run: |
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage build --promote
+
+      - name: Name the tool store by its content
+        id: tool-store-key
+        if: always()
+        run: |
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the tool store
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
+
+      - name: Say that the run failed
+        if: failure()
+        env:
+          TOKEN: ${{ github.token }}
+          TITLE: "ci is failing"
+        run: |
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
+  publish-default:
+    needs: [evaluate, build-promote]
+    if: needs.evaluate.outputs.outcome == 'proceed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Restore the tool store
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            tool-store-${{ runner.os }}-
+
+      - name: Check out the workspace around this repo
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Install the toolchain from the workspace
+        run: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Run publish default
+        id: phase
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
+        run: |
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --substage default
+
+      - name: Keep what this job built for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-${{ github.run_id }}-publish-default
+          path: .forge-ci/artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Name the tool store by its content
+        id: tool-store-key
+        if: always()
+        run: |
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the tool store
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
+
+      - name: Say that the run failed
+        if: failure()
+        env:
+          TOKEN: ${{ github.token }}
+          TITLE: "ci is failing"
+        run: |
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
+  publish-dist:
+    needs: [evaluate, build-promote]
+    if: needs.evaluate.outputs.outcome == 'proceed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Restore the tool store
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            tool-store-${{ runner.os }}-
+
+      - name: Check out the workspace around this repo
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Install the toolchain from the workspace
+        run: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Run publish dist
+        id: phase
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
+        run: |
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --substage dist
+
+      - name: Keep what this job built for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-${{ github.run_id }}-publish-dist
+          path: .forge-ci/artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Name the tool store by its content
+        id: tool-store-key
+        if: always()
+        run: |
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the tool store
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
+
+      - name: Say that the run failed
+        if: failure()
+        env:
+          TOKEN: ${{ github.token }}
+          TITLE: "ci is failing"
+        run: |
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
+  publish-promote:
+    needs: [evaluate, publish-default, publish-dist]
+    if: needs.evaluate.outputs.outcome == 'proceed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Restore the tool store
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            tool-store-${{ runner.os }}-
+
+      - name: Check out the workspace around this repo
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Install the toolchain from the workspace
+        run: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Promote stage publish
+        id: phase
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
+        run: |
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --promote
+
+      - name: Name the tool store by its content
+        id: tool-store-key
+        if: always()
+        run: |
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the tool store
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
+
+      - name: Say that the run failed
+        if: failure()
+        env:
+          TOKEN: ${{ github.token }}
+          TITLE: "ci is failing"
+        run: |
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
+  image-default:
+    needs: [evaluate, publish-promote]
+    if: needs.evaluate.outputs.outcome == 'proceed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Restore the tool store
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            tool-store-${{ runner.os }}-
+
+      - name: Check out the workspace around this repo
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Install the toolchain from the workspace
+        run: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Run image default
+        id: phase
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
+        run: |
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage image --substage default
+
+      - name: Keep what this job built for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-${{ github.run_id }}-image-default
+          path: .forge-ci/artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Name the tool store by its content
+        id: tool-store-key
+        if: always()
+        run: |
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the tool store
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
+
+      - name: Say that the run failed
+        if: failure()
+        env:
+          TOKEN: ${{ github.token }}
+          TITLE: "ci is failing"
+        run: |
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
+  image-promote:
+    needs: [evaluate, image-default]
+    if: needs.evaluate.outputs.outcome == 'proceed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Restore the tool store
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            tool-store-${{ runner.os }}-
+
+      - name: Check out the workspace around this repo
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Install the toolchain from the workspace
+        run: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Promote stage image
+        id: phase
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
+        run: |
+          forge-ci apply --config forge-ci.yaml --root . --phase stages --stage image --promote
+
+      - name: Name the tool store by its content
+        id: tool-store-key
+        if: always()
+        run: |
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the tool store
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
+
+      - name: Say that the run failed
+        if: failure()
+        env:
+          TOKEN: ${{ github.token }}
+          TITLE: "ci is failing"
+        run: |
+          open=$(curl -fsS \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues?state=open&per_page=100")
+          if printf '%s' "$open" | grep -q "\"title\": *\"$TITLE\""; then
+            echo "an issue is already open for this; not filing another"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues" \
+            -d "{\"title\":\"$TITLE\",\"body\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID failed. Nothing else reports this run, so it reports itself. Close this once a run goes green; a failure after that files a new one.\"}"
+  release:
+    needs: [evaluate, image-promote]
+    if: needs.evaluate.outputs.outcome == 'proceed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Restore the tool store
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/forge
+          key: tool-store-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            tool-store-${{ runner.os }}-
+
+      - name: Check out the workspace around this repo
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Install the toolchain from the workspace
+        run: |
+          (cd forge && go install ./cmd/forge)
+          (cd forge-factory && go install ./cmd/...)
+          (cd forge-ci && go install ./cmd/...)
+          (cd forge-register && go install ./cmd/...)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # This block is the last hand-written step in a generated
+          # workflow. Once this pipeline has published one aggregated dist
+          # release it collapses to consuming it, and works the same against
+          # an airgapped mirror:
+          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
+          #   forge-factory sync --config forge-factory.yaml --root .
+          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Bring back what the stages built
+        uses: actions/download-artifact@v4
+        with:
+          pattern: built-${{ github.run_id }}-*
+          merge-multiple: true
+          path: .forge-ci/artifacts
+
+      - name: Release
+        id: phase
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
+        run: |
+          forge-ci apply --config forge-ci.yaml --root . --phase release
 
       - name: Name the tool store by its content
         id: tool-store-key
