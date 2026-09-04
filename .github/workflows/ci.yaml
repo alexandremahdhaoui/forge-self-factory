@@ -230,7 +230,15 @@ jobs:
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried
+
+      - name: Unpack it
+        run: |
+          mkdir -p .forge-ci/artifacts
+          for f in .forge-ci/carried/*.tar.gz; do
+            [ -e "$f" ] || continue
+            tar -xzf "$f" -C .forge-ci/artifacts
+          done
 
       - name: Run test unit
         id: phase
@@ -240,11 +248,18 @@ jobs:
         run: |
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage test --substage unit --revision ${{ needs.evaluate.outputs.revision }}
 
+      - name: Pack what this job built
+        run: |
+          if [ -d .forge-ci/artifacts ]; then
+            mkdir -p .forge-ci/carried
+            tar -czf .forge-ci/carried/built-test-unit.tar.gz -C .forge-ci/artifacts .
+          fi
+
       - name: Keep what this job built for the jobs after it
         uses: actions/upload-artifact@v4
         with:
           name: built-${{ github.run_id }}-test-unit
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried/built-test-unit.tar.gz
           if-no-files-found: ignore
           retention-days: 7
 
@@ -403,7 +418,15 @@ jobs:
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried
+
+      - name: Unpack it
+        run: |
+          mkdir -p .forge-ci/artifacts
+          for f in .forge-ci/carried/*.tar.gz; do
+            [ -e "$f" ] || continue
+            tar -xzf "$f" -C .forge-ci/artifacts
+          done
 
       - name: Run build build-artifacts
         id: phase
@@ -413,11 +436,18 @@ jobs:
         run: |
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage build --substage build-artifacts --revision ${{ needs.evaluate.outputs.revision }}
 
+      - name: Pack what this job built
+        run: |
+          if [ -d .forge-ci/artifacts ]; then
+            mkdir -p .forge-ci/carried
+            tar -czf .forge-ci/carried/built-build-build-artifacts.tar.gz -C .forge-ci/artifacts .
+          fi
+
       - name: Keep what this job built for the jobs after it
         uses: actions/upload-artifact@v4
         with:
           name: built-${{ github.run_id }}-build-build-artifacts
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried/built-build-build-artifacts.tar.gz
           if-no-files-found: ignore
           retention-days: 7
 
@@ -576,7 +606,15 @@ jobs:
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried
+
+      - name: Unpack it
+        run: |
+          mkdir -p .forge-ci/artifacts
+          for f in .forge-ci/carried/*.tar.gz; do
+            [ -e "$f" ] || continue
+            tar -xzf "$f" -C .forge-ci/artifacts
+          done
 
       - name: Run package package-container
         id: phase
@@ -586,11 +624,18 @@ jobs:
         run: |
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage package --substage package-container --revision ${{ needs.evaluate.outputs.revision }}
 
+      - name: Pack what this job built
+        run: |
+          if [ -d .forge-ci/artifacts ]; then
+            mkdir -p .forge-ci/carried
+            tar -czf .forge-ci/carried/built-package-package-container.tar.gz -C .forge-ci/artifacts .
+          fi
+
       - name: Keep what this job built for the jobs after it
         uses: actions/upload-artifact@v4
         with:
           name: built-${{ github.run_id }}-package-package-container
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried/built-package-package-container.tar.gz
           if-no-files-found: ignore
           retention-days: 7
 
@@ -749,7 +794,15 @@ jobs:
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried
+
+      - name: Unpack it
+        run: |
+          mkdir -p .forge-ci/artifacts
+          for f in .forge-ci/carried/*.tar.gz; do
+            [ -e "$f" ] || continue
+            tar -xzf "$f" -C .forge-ci/artifacts
+          done
 
       - name: Run release release-artifacts
         id: phase
@@ -759,11 +812,18 @@ jobs:
         run: |
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage release --substage release-artifacts --revision ${{ needs.evaluate.outputs.revision }}
 
+      - name: Pack what this job built
+        run: |
+          if [ -d .forge-ci/artifacts ]; then
+            mkdir -p .forge-ci/carried
+            tar -czf .forge-ci/carried/built-release-release-artifacts.tar.gz -C .forge-ci/artifacts .
+          fi
+
       - name: Keep what this job built for the jobs after it
         uses: actions/upload-artifact@v4
         with:
           name: built-${{ github.run_id }}-release-release-artifacts
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried/built-release-release-artifacts.tar.gz
           if-no-files-found: ignore
           retention-days: 7
 
@@ -922,7 +982,15 @@ jobs:
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried
+
+      - name: Unpack it
+        run: |
+          mkdir -p .forge-ci/artifacts
+          for f in .forge-ci/carried/*.tar.gz; do
+            [ -e "$f" ] || continue
+            tar -xzf "$f" -C .forge-ci/artifacts
+          done
 
       - name: Run release-image release-container
         id: phase
@@ -932,11 +1000,18 @@ jobs:
         run: |
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage release-image --substage release-container --revision ${{ needs.evaluate.outputs.revision }}
 
+      - name: Pack what this job built
+        run: |
+          if [ -d .forge-ci/artifacts ]; then
+            mkdir -p .forge-ci/carried
+            tar -czf .forge-ci/carried/built-release-image-release-container.tar.gz -C .forge-ci/artifacts .
+          fi
+
       - name: Keep what this job built for the jobs after it
         uses: actions/upload-artifact@v4
         with:
           name: built-${{ github.run_id }}-release-image-release-container
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried/built-release-image-release-container.tar.gz
           if-no-files-found: ignore
           retention-days: 7
 
@@ -1095,7 +1170,15 @@ jobs:
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried
+
+      - name: Unpack it
+        run: |
+          mkdir -p .forge-ci/artifacts
+          for f in .forge-ci/carried/*.tar.gz; do
+            [ -e "$f" ] || continue
+            tar -xzf "$f" -C .forge-ci/artifacts
+          done
 
       - name: Run publish publish-revision
         id: phase
@@ -1105,11 +1188,18 @@ jobs:
         run: |
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --substage publish-revision --revision ${{ needs.evaluate.outputs.revision }}
 
+      - name: Pack what this job built
+        run: |
+          if [ -d .forge-ci/artifacts ]; then
+            mkdir -p .forge-ci/carried
+            tar -czf .forge-ci/carried/built-publish-publish-revision.tar.gz -C .forge-ci/artifacts .
+          fi
+
       - name: Keep what this job built for the jobs after it
         uses: actions/upload-artifact@v4
         with:
           name: built-${{ github.run_id }}-publish-publish-revision
-          path: .forge-ci/artifacts
+          path: .forge-ci/carried/built-publish-publish-revision.tar.gz
           if-no-files-found: ignore
           retention-days: 7
 
