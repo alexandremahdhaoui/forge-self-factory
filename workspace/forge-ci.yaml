@@ -235,6 +235,28 @@ state: ci-state
 triggers: [on-change]
 
 targets:
+  # A test stage may need what the build makes, and `test run <stage>` builds
+  # nothing. forge-ci's unit stage reads the spec vectors that its
+  # resolve-spec BUILD entry fetches into .forge/spec-cache, so running the
+  # stage alone failed on a cache nobody had written. It runs first in the
+  # same substage, because a substage runs its targets in order.
+  #
+  # Named, and not a whole `forge build`: the rest of forge-ci's build is
+  # codegen that wants mockery, and this factory installs the four toolchain
+  # binaries and nothing else. resolve-spec reads the sibling checkouts that
+  # are already on disk.
+  #
+  # And not test-all, which would drag in stages this runner cannot serve:
+  # forge alone declares testenv-kind and container-build, wanting a kind
+  # binary and a container daemon.
+  #
+  # forge-ci alone: it is the only member here whose test stage reads what
+  # its build writes. A member that needs the same will say so by failing on
+  # the file it could not find, which is how this one was found.
+  - alias: resolve-spec
+    forge: build resolve-spec
+    in: [forge-ci]
+
   # Every repo this factory publishes runs its own unit stage. It ran in two
   # of the four, so the release shipped executables from forge and forge-ci
   # that this pipeline had never tested.
@@ -284,7 +306,13 @@ stages:
         # because a multi-repo pipeline that never syncs is refused by
         # forge-ci validate, and the rule is structural on purpose.
         sync: true
-        targets: [unit]
+        # Two targets, in this order, in one substage: a substage's targets
+        # run one after another in the same job on the same disk, and that
+        # is the only place the spec cache can reach the tests. It is not a
+        # stage of its own - a stage is another job on another runner, and
+        # resolve-spec's artifact is a command-output with no location, so
+        # the transport between jobs has nothing to carry.
+        targets: [resolve-spec, unit]
 
   # The executables the release ships and the image packs.
   - name: build
