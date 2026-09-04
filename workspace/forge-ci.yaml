@@ -96,9 +96,11 @@ engines:
           #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
           #   forge-factory sync --config forge-factory.yaml --root .
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
-      # One apply as jobs: self-reconcile, evaluate, then one per substage
-      # with a promotion job per stage. There is no release job - a release
-      # is a substage, so the jobs that publish are stage jobs like any
+      # One apply as jobs: self-reconcile, evaluate, then one per substage.
+      # Nothing sits between two stages - the jobs of a stage wait on every
+      # substage of the stage in front and ask that stage's promotion
+      # themselves - and there is no release job either, because a release
+      # is a substage and the jobs that publish are stage jobs like any
       # other. A failure shows where it happened, and what a stage built
       # crosses to the stages after it as an Actions artifact: the image
       # layout the package stage assembles is what the release stage pushes.
