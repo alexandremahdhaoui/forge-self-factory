@@ -62,10 +62,11 @@ jobs:
         id: tool-store-key
         if: always()
         run: |
-          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 3 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "key=$(find ~/.cache/forge -mindepth 1 -maxdepth 4 2>/dev/null | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "present=$([ -d ~/.cache/forge ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Save the tool store
-        if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
+        if: always() && steps.tool-store-key.outputs.present == 'true' && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
