@@ -4,10 +4,9 @@
 # every forge and forge-* runnable declares this factory, and
 # forge-self-register carries the internal track each member resolves from.
 #
-# Every member keeps its go.mod and go.sum committed. That is what breaks
-# the bootstrap cycle: `go run <module>@<version>` works before any factory
-# or cache exists. No member declares a language, so sync generates no
-# manifest here and the committed files stand.
+# Every member keeps its go.mod and go.sum committed. No member declares a
+# language, so sync generates no manifest here and the committed files
+# stand.
 version: "1"
 name: forge-self
 
@@ -51,6 +50,37 @@ register:
 engines:
   - alias: go
     engine: forge://github.com/alexandremahdhaoui/forge-factory/cmd/factory-lang-go
+
+# The container the pipeline's jobs run in, resolved from this factory's
+# own register like golden resolves it from theirs. Sync writes the full
+# reference into the generated .forge/toolchain-image and the pipeline
+# reads it there; the version is typed nowhere. The image supplies `forge`
+# for the first clone and nothing else the pipeline relies on: every real
+# step runs the four binaries built from the checked-out members, which is
+# the code under test.
+#
+# This pipeline writes the register the pin comes from, so a bad image is
+# a bad pin in its own catalog. Recovery is one edit to
+# index/internal/ghcr.io/alexandremahdhaoui/forge/0.json in
+# forge-self-register, never a rebuild from the proxy.
+toolchain:
+  image:
+    ref: ghcr.io/alexandremahdhaoui/forge
+    track: internal:ghcr.io/alexandremahdhaoui/forge
+
+  # What the members' own test-alls need beyond the four toolchain
+  # binaries: every repo's build regenerates its mocks, and the lint
+  # stages want the linter the repos are clean under. Literal pins, the
+  # same versions golden adopted from its register, because this register
+  # carries no go tracks yet (see FOLLOWUP); sync builds each once into
+  # the store with the go that setup-go put on PATH.
+  binaries:
+    - name: mockery
+      module: github.com/vektra/mockery/v3
+      version: v3.7.3
+    - name: golangci-lint
+      module: github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+      version: v2.13.1
 
 state:
   engine: forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-state-git

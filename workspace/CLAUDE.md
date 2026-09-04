@@ -10,9 +10,15 @@ Bootstrap from nothing:
 forge clone git@github.com:alexandremahdhaoui/forge-self-factory.git
 ```
 
-Every member keeps go.mod and go.sum committed so `go run <module>@<ver>`
-works before any cache exists. No member declares a language, so sync
-generates no manifest here.
+Every member keeps go.mod and go.sum committed. No member declares a
+language, so sync generates no manifest here.
+
+CI jobs run in the published toolchain image, resolved from the register's
+`internal:ghcr.io/alexandremahdhaoui/forge` track; the image supplies
+`forge` for the first clone, and every real step runs the toolchain built
+from the checked-out members. Never seed from the module proxy with
+`go run <module>@<version>`: it looks up `@latest` and races the tag the
+run just cut.
 
 Build and test any member with forge only:
 

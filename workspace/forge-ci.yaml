@@ -67,6 +67,17 @@ engines:
   #
   # Bootstrap provisions the lot; every apply re-converges it, so a
   # hand-edited workflow drifts back to this spec.
+  #
+  # The jobs run in the published toolchain image, resolved from this
+  # factory's own register into .forge/toolchain-image by sync, the same
+  # way golden's are. The image supplies `forge` for the first clone and
+  # nothing else this pipeline relies on: setup-go and the toolchain script
+  # stay, because every real step must run the four binaries built from the
+  # checked-out members - that is the code under test. The seed this
+  # replaced, `go run <module>@<version> bootstrap`, looked up the module's
+  # @latest to report deprecation and found the tag release-artifacts had
+  # cut eleven seconds earlier in the same run, which the sum database had
+  # not indexed (run 66). No `@version` here means no lookup and no proxy.
   - alias: actions
     type: compute
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-compute-github"
@@ -74,41 +85,33 @@ engines:
     spec:
       repo: alexandremahdhaoui/forge-self-factory
       dir: forge-self-factory
+      containerFile: .forge/toolchain-image
       setup:
         - uses: actions/setup-go@v7
           with:
             go-version: "1.26"
       workspace:
-        # One pinned binary stands the whole workspace up. Bump it when this
-        # pipeline republishes forge-factory, so the seed and the toolchain
-        # it builds agree.
-        bootstrapCommand: go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+        # A container carries tools and not members, so this is what puts
+        # the repos on disk. forge is already on PATH inside the image.
+        bootstrapCommand: forge clone git@github.com:alexandremahdhaoui/forge-self-factory.git .
         toolchainScript: |
           (cd forge && go install ./cmd/forge)
           (cd forge-factory && go install ./cmd/...)
           (cd forge-ci && go install ./cmd/...)
           (cd forge-register && go install ./cmd/...)
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
-          # This block is the last hand-written step in a generated
-          # workflow. Once this pipeline has published one aggregated dist
-          # release it collapses to consuming it, and works the same against
-          # an airgapped mirror:
-          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
-          #   forge-factory sync --config forge-factory.yaml --root .
-          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
-      # One apply as jobs: self-reconcile, evaluate, then one per substage.
-      # Nothing sits between two stages - the jobs of a stage wait on every
-      # substage of the stage in front and ask that stage's promotion
-      # themselves - and there is no release job either, because a release
-      # is a substage and the jobs that publish are stage jobs like any
-      # other. A failure shows where it happened, and what a stage built
-      # crosses to the stages after it as an Actions artifact: the image
-      # layout the package stage assembles is what the release stage pushes.
-      # Every job stands the workspace up and builds the toolchain from
-      # source on its own, which is the cost of seeing each substage on a
-      # pipeline that runs no image.
+        # What the script installs, cached across the jobs of a run under
+        # the members' shas: five jobs compile the toolchain once.
+        toolchainCachePaths: ["~/go/bin", "~/.cache/go-build"]
+      # One apply as jobs: self-reconcile, evaluate, then one per stage.
+      # A stage's job runs its substages in the waves their `needs:` declare
+      # and asks the promotion itself; the job of the stage after waits on
+      # it. What a stage built crosses to the stages after it as an Actions
+      # artifact: the image layout the build stage assembles is what the
+      # release stage pushes. Five jobs a run, and a failure shows the stage
+      # it happened in.
       phases: true
-      jobs: substage
+      jobs: stage
       secrets:
         # Reads every toolchain member and pushes the state repo; the
         # release step needs contents:write on each member it tags.
@@ -209,7 +212,7 @@ engines:
     spec:
       repo: alexandremahdhaoui/forge-self-factory
       tokenEnv: FORGE_CI_GITHUB_TOKEN
-  # No assets glob: the dist stage builds every command whose build entry
+  # No assets glob: the build stage builds every command whose build entry
   # declares platforms:, each recorded as an artifact named
   # <name>_<os>_<arch>, and the release publishes exactly those records. A
   # repo's own tool declares no platform and never leaves its repo.
@@ -237,34 +240,44 @@ state: ci-state
 triggers: [on-change]
 
 targets:
-  # A test stage may need what the build makes, and `test run <stage>` builds
-  # nothing. forge-ci's unit stage reads the spec vectors that its
-  # resolve-spec BUILD entry fetches into .forge/spec-cache, so running the
-  # stage alone failed on a cache nobody had written. It runs first in the
-  # same substage, because a substage runs its targets in order.
-  #
-  # Named, and not a whole `forge build`: the rest of forge-ci's build is
-  # codegen that wants mockery, and this factory installs the four toolchain
-  # binaries and nothing else. resolve-spec reads the sibling checkouts that
-  # are already on disk.
-  #
-  # And not test-all, which would drag in stages this runner cannot serve:
-  # forge alone declares testenv-kind and container-build, wanting a kind
-  # binary and a container daemon.
-  #
-  # forge-ci alone: it is the only member here whose test stage reads what
-  # its build writes. A member that needs the same will say so by failing on
-  # the file it could not find, which is how this one was found.
-  - alias: resolve-spec
-    forge: build resolve-spec
-    in: [forge-ci]
+  # Every stage each member declares, which is what test-all means: build,
+  # then lint, the gates, unit, integration, conformance, e2e and coverage,
+  # as the repo names them. The pipeline ran unit alone in two of the four
+  # repos, so a release shipped executables that no gate had seen.
+  - alias: test-all
+    forge: test-all
+    in: [forge-ci, forge-factory, forge-register]
 
-  # Every repo this factory publishes runs its own unit stage. It ran in two
-  # of the four, so the release shipped executables from forge and forge-ci
-  # that this pipeline had never tested.
-  - alias: unit
+  # forge's test-all wants a kind cluster (integration) and a container
+  # daemon (the container-build entries its `generated` regenerates), and
+  # this runner has neither. Every other stage it declares, by name.
+  - alias: forge-lint-tags
+    forge: test run lint-tags
+    in: [forge]
+  - alias: forge-lint-license
+    forge: test run lint-license
+    in: [forge]
+  - alias: forge-lint
+    forge: test run lint
+    in: [forge]
+  - alias: forge-unit
     forge: test run unit
-    in: [forge, forge-ci, forge-factory, forge-register]
+    in: [forge]
+  - alias: forge-unit-nonroot
+    forge: test run unit-nonroot
+    in: [forge]
+  - alias: forge-e2e
+    forge: test run e2e
+    in: [forge]
+  - alias: forge-e2e-decl
+    forge: test run e2e-decl
+    in: [forge]
+  - alias: forge-e2e-stub
+    forge: test run e2e-stub
+    in: [forge]
+  - alias: forge-e2e-run
+    forge: test run e2e-run
+    in: [forge]
 
   - alias: publish-revision
     forge: test run publish-members
@@ -276,22 +289,18 @@ targets:
     forge: test run build-artifacts
     in: [forge, forge-ci, forge-factory, forge-register]
 
-  # Assemble the toolchain image from what the build stage cross-built. It
+  # Assemble the toolchain image from what build-artifacts cross-built. It
   # runs in the factory because that is the one place the whole workspace is
   # visible.
-  - alias: package-container
-    forge: test run package-container
+  - alias: build-container
+    forge: test run build-container
     in: [forge-self-factory]
 
-# Test, then build, then package, then release. Stage order is the only
-# ordering this pipeline has: the loop stops at the first stage that does not
-# advance, so nothing is packed that did not cross-build and nothing is
-# published that did not pack.
-#
-# Substages of ONE stage run at the same time, which is why the two releases
-# live in a stage of their own rather than beside the build: a publishing
-# substage next to a building one would publish while the build was still
-# running and read none of what it made.
+# Test, then build, then release. Stage order separates what must be proven
+# from what is published; inside a stage, `needs:` on a substage says what
+# it waits on, and substages that name nothing run at the same time. The
+# loop stops at the first stage that does not advance, so nothing is packed
+# that did not cross-build and nothing is published that did not pack.
 #
 # The revision is not minted here. The evaluate phase mints it before the
 # first stage, because it is the run's identity rather than its verdict, and
@@ -300,23 +309,30 @@ stages:
   - name: test
     promotion: all-pass
     substages:
-      - name: unit
+      - name: test-all
         engine: here
         manager: local
-        # This factory's members declare no languages and no dependencies,
-        # so the convergence writes nothing and locks nothing - it is here
-        # because a multi-repo pipeline that never syncs is refused by
-        # forge-ci validate, and the rule is structural on purpose.
+        # The convergence provisions mockery into the store before anything
+        # builds, and a multi-repo pipeline that never syncs is refused by
+        # forge-ci validate.
         sync: true
-        # Two targets, in this order, in one substage: a substage's targets
-        # run one after another in the same job on the same disk, and that
-        # is the only place the spec cache can reach the tests. It is not a
-        # stage of its own - a stage is another job on another runner, and
-        # resolve-spec's artifact is a command-output with no location, so
-        # the transport between jobs has nothing to carry.
-        targets: [resolve-spec, unit]
+        # Targets run one after another on one disk. forge's stages come
+        # after the three test-alls that need nothing of forge's own tree.
+        targets:
+          - test-all
+          - forge-lint-tags
+          - forge-lint-license
+          - forge-lint
+          - forge-unit
+          - forge-unit-nonroot
+          - forge-e2e
+          - forge-e2e-decl
+          - forge-e2e-stub
+          - forge-e2e-run
 
-  # The executables the release ships and the image packs.
+  # The executables the release ships, then the image built from them:
+  # build-container needs build-artifacts, and that edge is the whole
+  # ordering.
   - name: build
     promotion: all-pass
     substages:
@@ -325,60 +341,39 @@ stages:
         manager: local
         sync: true
         targets: [build-artifacts]
-
-  # Packaging follows building. The image is assembled here and pushed in
-  # the release stage, so an assembly that fails costs no tag and a registry
-  # that is down cannot hold up the binary release.
-  - name: package
-    promotion: all-pass
-    substages:
-      - name: package-container
+      - name: build-container
         engine: here
         manager: local
         sync: true
-        targets: [package-container]
+        needs: [build-artifacts]
+        targets: [build-container]
 
-  # Three publishes, declared the same way anything else is, and each in a
-  # stage of its own because they must not run at the same time.
+  # Three publishes, declared the same way anything else is, in the order
+  # their `needs:` declare. Every artifact substage records the release
+  # under releases/<revision> and releases/by-tag/<tag>, and two of them
+  # writing those files at once is the rebase conflict that killed run 44 -
+  # so release-container waits on release-artifacts. publish-revision waits
+  # on both: it is the only door into the register's internal track, and it
+  # writes the image's version there too, so the catalog can never name a
+  # tag nobody cut or an image nobody pushed.
   #
-  # They shared one stage until run 44, which died here:
-  #
-  #   recording release "c16744d2175e": rebasing forge-self-state onto
-  #   origin/main: could not apply ec95947... ci: release c16744d2175e
-  #
-  # Every artifact substage records the release under releases/<revision>
-  # and releases/by-tag/<tag>. Two of them in one stage write those same two
-  # files at the same time with different contents, both push, and the
-  # loser's rebase hits a content conflict it cannot resolve. Stage order is
-  # the ordering this pipeline has, so it is what separates them.
-  #
-  # release is FIRST on purpose: the core reads the first artifact engine in
-  # stage then substage order for the repo the version line lives in and for
-  # the members the release leaves alone. release-container names no repo -
-  # it pushes to a registry and tags nothing - so putting it first would put
-  # the version line at the factory root, which is not a repo.
+  # release-artifacts is FIRST on purpose: the core reads the first artifact
+  # engine in stage then substage order for the repo the version line lives
+  # in and for the members the release leaves alone. release-container names
+  # no repo - it pushes to a registry and tags nothing - so putting it first
+  # would put the version line at the factory root, which is not a repo.
   - name: release
     promotion: all-pass
     substages:
       - name: release-artifacts
         engine: release-artifacts
         manager: local
-
-  - name: release-image
-    promotion: all-pass
-    substages:
       - name: release-container
         engine: release-container
         manager: local
-
-  # The only door into the register's internal track: each member enters with
-  # this revision as provenance. Last, and in a stage of its own, so the
-  # catalog can never name a tag nobody cut - the ordering hazard FOLLOWUP
-  # recorded, closed here by the same tool that separates the two releases.
-  - name: publish
-    promotion: all-pass
-    substages:
+        needs: [release-artifacts]
       - name: publish-revision
         engine: here
         manager: local
+        needs: [release-container]
         targets: [publish-revision]
