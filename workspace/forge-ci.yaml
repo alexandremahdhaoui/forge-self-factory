@@ -336,27 +336,46 @@ stages:
         sync: true
         targets: [package-container]
 
-  # Three publishes, declared the same way anything else is.
+  # Three publishes, declared the same way anything else is, and each in a
+  # stage of its own because they must not run at the same time.
   #
-  # release-artifacts is FIRST on purpose: the core reads the first artifact
-  # engine in stage then substage order for the repo the version line lives
-  # in and for the members the release leaves alone. release-container names
-  # no repo - it pushes to a registry and tags nothing - so listing it first
-  # would put the version line at the factory root, which is not a repo.
+  # They shared one stage until run 44, which died here:
+  #
+  #   recording release "c16744d2175e": rebasing forge-self-state onto
+  #   origin/main: could not apply ec95947... ci: release c16744d2175e
+  #
+  # Every artifact substage records the release under releases/<revision>
+  # and releases/by-tag/<tag>. Two of them in one stage write those same two
+  # files at the same time with different contents, both push, and the
+  # loser's rebase hits a content conflict it cannot resolve. Stage order is
+  # the ordering this pipeline has, so it is what separates them.
+  #
+  # release is FIRST on purpose: the core reads the first artifact engine in
+  # stage then substage order for the repo the version line lives in and for
+  # the members the release leaves alone. release-container names no repo -
+  # it pushes to a registry and tags nothing - so putting it first would put
+  # the version line at the factory root, which is not a repo.
   - name: release
     promotion: all-pass
     substages:
       - name: release-artifacts
         engine: release-artifacts
         manager: local
+
+  - name: release-image
+    promotion: all-pass
+    substages:
       - name: release-container
         engine: release-container
         manager: local
-      # The only door into the register's internal track: each member enters
-      # with this revision as provenance. It runs beside the two releases, so
-      # the catalog write and the tagging race - today's behaviour, recorded
-      # in FOLLOWUP, and fixed by moving this into a stage of its own after
-      # them.
+
+  # The only door into the register's internal track: each member enters with
+  # this revision as provenance. Last, and in a stage of its own, so the
+  # catalog can never name a tag nobody cut - the ordering hazard FOLLOWUP
+  # recorded, closed here by the same tool that separates the two releases.
+  - name: publish
+    promotion: all-pass
+    substages:
       - name: publish-revision
         engine: here
         manager: local
