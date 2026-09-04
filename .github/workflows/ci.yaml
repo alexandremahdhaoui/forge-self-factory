@@ -225,20 +225,10 @@ jobs:
           #   forge-factory sync --config forge-factory.yaml --root .
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
-      - name: Bring back what the jobs before this one built
-        uses: actions/download-artifact@v8
-        with:
-          pattern: built-${{ github.run_id }}-*
-          merge-multiple: true
-          path: .forge-ci/carried
-
-      - name: Unpack it
+      - name: Mark what was here before this job ran
         run: |
           mkdir -p .forge-ci/artifacts
-          for f in .forge-ci/carried/*.tar.gz; do
-            [ -e "$f" ] || continue
-            tar -xzf "$f" -C .forge-ci/artifacts
-          done
+          touch .forge-ci/pack-mark
 
       - name: Run test unit
         id: phase
@@ -249,18 +239,27 @@ jobs:
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage test --substage unit --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Pack what this job built
+        id: pack
         run: |
           if [ -d .forge-ci/artifacts ]; then
+            find .forge-ci/artifacts -type f -newer .forge-ci/pack-mark -printf '%P\n' > .forge-ci/pack-list
+          else
+            : > .forge-ci/pack-list
+          fi
+          if [ -s .forge-ci/pack-list ]; then
             mkdir -p .forge-ci/carried
-            tar -czf .forge-ci/carried/built-test-unit.tar.gz -C .forge-ci/artifacts .
+            tar -czf .forge-ci/carried/built-test-unit.tar.gz -C .forge-ci/artifacts -T .forge-ci/pack-list
+            echo packed=true >> "$GITHUB_OUTPUT"
+          else
+            echo packed=false >> "$GITHUB_OUTPUT"
           fi
 
       - name: Keep what this job built for the jobs after it
+        if: steps.pack.outputs.packed == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-test-unit
           path: .forge-ci/carried/built-test-unit.tar.gz
-          if-no-files-found: ignore
           retention-days: 7
 
       - name: Name the tool store by its content
@@ -428,6 +427,11 @@ jobs:
             tar -xzf "$f" -C .forge-ci/artifacts
           done
 
+      - name: Mark what was here before this job ran
+        run: |
+          mkdir -p .forge-ci/artifacts
+          touch .forge-ci/pack-mark
+
       - name: Run build build-artifacts
         id: phase
         env:
@@ -437,18 +441,27 @@ jobs:
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage build --substage build-artifacts --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Pack what this job built
+        id: pack
         run: |
           if [ -d .forge-ci/artifacts ]; then
+            find .forge-ci/artifacts -type f -newer .forge-ci/pack-mark -printf '%P\n' > .forge-ci/pack-list
+          else
+            : > .forge-ci/pack-list
+          fi
+          if [ -s .forge-ci/pack-list ]; then
             mkdir -p .forge-ci/carried
-            tar -czf .forge-ci/carried/built-build-build-artifacts.tar.gz -C .forge-ci/artifacts .
+            tar -czf .forge-ci/carried/built-build-build-artifacts.tar.gz -C .forge-ci/artifacts -T .forge-ci/pack-list
+            echo packed=true >> "$GITHUB_OUTPUT"
+          else
+            echo packed=false >> "$GITHUB_OUTPUT"
           fi
 
       - name: Keep what this job built for the jobs after it
+        if: steps.pack.outputs.packed == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-build-build-artifacts
           path: .forge-ci/carried/built-build-build-artifacts.tar.gz
-          if-no-files-found: ignore
           retention-days: 7
 
       - name: Name the tool store by its content
@@ -616,6 +629,11 @@ jobs:
             tar -xzf "$f" -C .forge-ci/artifacts
           done
 
+      - name: Mark what was here before this job ran
+        run: |
+          mkdir -p .forge-ci/artifacts
+          touch .forge-ci/pack-mark
+
       - name: Run package package-container
         id: phase
         env:
@@ -625,18 +643,27 @@ jobs:
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage package --substage package-container --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Pack what this job built
+        id: pack
         run: |
           if [ -d .forge-ci/artifacts ]; then
+            find .forge-ci/artifacts -type f -newer .forge-ci/pack-mark -printf '%P\n' > .forge-ci/pack-list
+          else
+            : > .forge-ci/pack-list
+          fi
+          if [ -s .forge-ci/pack-list ]; then
             mkdir -p .forge-ci/carried
-            tar -czf .forge-ci/carried/built-package-package-container.tar.gz -C .forge-ci/artifacts .
+            tar -czf .forge-ci/carried/built-package-package-container.tar.gz -C .forge-ci/artifacts -T .forge-ci/pack-list
+            echo packed=true >> "$GITHUB_OUTPUT"
+          else
+            echo packed=false >> "$GITHUB_OUTPUT"
           fi
 
       - name: Keep what this job built for the jobs after it
+        if: steps.pack.outputs.packed == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-package-package-container
           path: .forge-ci/carried/built-package-package-container.tar.gz
-          if-no-files-found: ignore
           retention-days: 7
 
       - name: Name the tool store by its content
@@ -804,6 +831,11 @@ jobs:
             tar -xzf "$f" -C .forge-ci/artifacts
           done
 
+      - name: Mark what was here before this job ran
+        run: |
+          mkdir -p .forge-ci/artifacts
+          touch .forge-ci/pack-mark
+
       - name: Run release release-artifacts
         id: phase
         env:
@@ -813,18 +845,27 @@ jobs:
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage release --substage release-artifacts --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Pack what this job built
+        id: pack
         run: |
           if [ -d .forge-ci/artifacts ]; then
+            find .forge-ci/artifacts -type f -newer .forge-ci/pack-mark -printf '%P\n' > .forge-ci/pack-list
+          else
+            : > .forge-ci/pack-list
+          fi
+          if [ -s .forge-ci/pack-list ]; then
             mkdir -p .forge-ci/carried
-            tar -czf .forge-ci/carried/built-release-release-artifacts.tar.gz -C .forge-ci/artifacts .
+            tar -czf .forge-ci/carried/built-release-release-artifacts.tar.gz -C .forge-ci/artifacts -T .forge-ci/pack-list
+            echo packed=true >> "$GITHUB_OUTPUT"
+          else
+            echo packed=false >> "$GITHUB_OUTPUT"
           fi
 
       - name: Keep what this job built for the jobs after it
+        if: steps.pack.outputs.packed == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-release-release-artifacts
           path: .forge-ci/carried/built-release-release-artifacts.tar.gz
-          if-no-files-found: ignore
           retention-days: 7
 
       - name: Name the tool store by its content
@@ -992,6 +1033,11 @@ jobs:
             tar -xzf "$f" -C .forge-ci/artifacts
           done
 
+      - name: Mark what was here before this job ran
+        run: |
+          mkdir -p .forge-ci/artifacts
+          touch .forge-ci/pack-mark
+
       - name: Run release-image release-container
         id: phase
         env:
@@ -1001,18 +1047,27 @@ jobs:
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage release-image --substage release-container --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Pack what this job built
+        id: pack
         run: |
           if [ -d .forge-ci/artifacts ]; then
+            find .forge-ci/artifacts -type f -newer .forge-ci/pack-mark -printf '%P\n' > .forge-ci/pack-list
+          else
+            : > .forge-ci/pack-list
+          fi
+          if [ -s .forge-ci/pack-list ]; then
             mkdir -p .forge-ci/carried
-            tar -czf .forge-ci/carried/built-release-image-release-container.tar.gz -C .forge-ci/artifacts .
+            tar -czf .forge-ci/carried/built-release-image-release-container.tar.gz -C .forge-ci/artifacts -T .forge-ci/pack-list
+            echo packed=true >> "$GITHUB_OUTPUT"
+          else
+            echo packed=false >> "$GITHUB_OUTPUT"
           fi
 
       - name: Keep what this job built for the jobs after it
+        if: steps.pack.outputs.packed == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-release-image-release-container
           path: .forge-ci/carried/built-release-image-release-container.tar.gz
-          if-no-files-found: ignore
           retention-days: 7
 
       - name: Name the tool store by its content
@@ -1180,6 +1235,11 @@ jobs:
             tar -xzf "$f" -C .forge-ci/artifacts
           done
 
+      - name: Mark what was here before this job ran
+        run: |
+          mkdir -p .forge-ci/artifacts
+          touch .forge-ci/pack-mark
+
       - name: Run publish publish-revision
         id: phase
         env:
@@ -1189,18 +1249,27 @@ jobs:
           forge-ci apply --config forge-ci.yaml --root . --phase stages --stage publish --substage publish-revision --revision ${{ needs.evaluate.outputs.revision }}
 
       - name: Pack what this job built
+        id: pack
         run: |
           if [ -d .forge-ci/artifacts ]; then
+            find .forge-ci/artifacts -type f -newer .forge-ci/pack-mark -printf '%P\n' > .forge-ci/pack-list
+          else
+            : > .forge-ci/pack-list
+          fi
+          if [ -s .forge-ci/pack-list ]; then
             mkdir -p .forge-ci/carried
-            tar -czf .forge-ci/carried/built-publish-publish-revision.tar.gz -C .forge-ci/artifacts .
+            tar -czf .forge-ci/carried/built-publish-publish-revision.tar.gz -C .forge-ci/artifacts -T .forge-ci/pack-list
+            echo packed=true >> "$GITHUB_OUTPUT"
+          else
+            echo packed=false >> "$GITHUB_OUTPUT"
           fi
 
       - name: Keep what this job built for the jobs after it
+        if: steps.pack.outputs.packed == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-publish-publish-revision
           path: .forge-ci/carried/built-publish-publish-revision.tar.gz
-          if-no-files-found: ignore
           retention-days: 7
 
       - name: Name the tool store by its content
