@@ -29,13 +29,13 @@ jobs:
     name: Reconcile CI resources
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -78,7 +78,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -110,13 +110,13 @@ jobs:
       revision: ${{ steps.phase.outputs.revision }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -162,7 +162,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -192,13 +192,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -226,7 +226,7 @@ jobs:
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
       - name: Bring back what the jobs before this one built
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
@@ -256,7 +256,7 @@ jobs:
           fi
 
       - name: Keep what this job built for the jobs after it
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-test-unit
           path: .forge-ci/carried/built-test-unit.tar.gz
@@ -271,7 +271,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -301,13 +301,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -350,7 +350,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -380,13 +380,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -414,7 +414,7 @@ jobs:
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
       - name: Bring back what the jobs before this one built
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
@@ -444,7 +444,7 @@ jobs:
           fi
 
       - name: Keep what this job built for the jobs after it
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-build-build-artifacts
           path: .forge-ci/carried/built-build-build-artifacts.tar.gz
@@ -459,7 +459,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -489,13 +489,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -538,7 +538,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -568,13 +568,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -602,7 +602,7 @@ jobs:
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
       - name: Bring back what the jobs before this one built
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
@@ -632,7 +632,7 @@ jobs:
           fi
 
       - name: Keep what this job built for the jobs after it
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-package-package-container
           path: .forge-ci/carried/built-package-package-container.tar.gz
@@ -647,7 +647,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -677,13 +677,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -726,7 +726,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -756,13 +756,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -790,7 +790,7 @@ jobs:
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
       - name: Bring back what the jobs before this one built
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
@@ -820,7 +820,7 @@ jobs:
           fi
 
       - name: Keep what this job built for the jobs after it
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-release-release-artifacts
           path: .forge-ci/carried/built-release-release-artifacts.tar.gz
@@ -835,7 +835,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -865,13 +865,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -914,7 +914,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -944,13 +944,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -978,7 +978,7 @@ jobs:
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
       - name: Bring back what the jobs before this one built
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
@@ -1008,7 +1008,7 @@ jobs:
           fi
 
       - name: Keep what this job built for the jobs after it
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-release-image-release-container
           path: .forge-ci/carried/built-release-image-release-container.tar.gz
@@ -1023,7 +1023,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -1053,13 +1053,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -1102,7 +1102,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -1132,13 +1132,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -1166,7 +1166,7 @@ jobs:
           #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
 
       - name: Bring back what the jobs before this one built
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: built-${{ github.run_id }}-*
           merge-multiple: true
@@ -1196,7 +1196,7 @@ jobs:
           fi
 
       - name: Keep what this job built for the jobs after it
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: built-${{ github.run_id }}-publish-publish-revision
           path: .forge-ci/carried/built-publish-publish-revision.tar.gz
@@ -1211,7 +1211,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
@@ -1241,13 +1241,13 @@ jobs:
     if: needs.evaluate.outputs.outcome == 'proceed'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
 
       - name: Restore the tool store
         id: tool-store
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ github.run_id }}
@@ -1290,7 +1290,7 @@ jobs:
 
       - name: Save the tool store
         if: always() && steps.tool-store.outputs.cache-matched-key != format('tool-store-{0}-{1}', runner.os, steps.tool-store-key.outputs.key)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/forge
           key: tool-store-${{ runner.os }}-${{ steps.tool-store-key.outputs.key }}
