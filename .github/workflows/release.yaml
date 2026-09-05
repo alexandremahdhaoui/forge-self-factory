@@ -16,6 +16,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/alexandremahdhaoui/forge:v0.45.62
     steps:
       - uses: actions/setup-go@v7
         with:
@@ -33,7 +35,21 @@ jobs:
       - name: Check out the workspace around this repo
         run: |
           git config --global url."https://x-access-token:${{ secrets.FORGE_CI_GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          go run github.com/alexandremahdhaoui/forge-factory/cmd/forge-factory@6aaa84a27c00f9be226998b2014d62d9129a8a96 bootstrap git@github.com:alexandremahdhaoui/forge-self-factory.git .
+          forge clone git@github.com:alexandremahdhaoui/forge-self-factory.git .
+
+      - name: Name the toolchain by the members it is built from
+        id: toolchain-key
+        run: |
+          echo "key=$(for d in */.git; do git -C "${d%/.git}" rev-parse HEAD; done | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the toolchain
+        id: toolchain-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/go/bin
+            ~/.cache/go-build
+          key: toolchain-${{ runner.os }}-${{ steps.toolchain-key.outputs.key }}
 
       - name: Install the toolchain from the workspace
         run: |
@@ -42,13 +58,15 @@ jobs:
           (cd forge-ci && go install ./cmd/...)
           (cd forge-register && go install ./cmd/...)
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
-          # This block is the last hand-written step in a generated
-          # workflow. Once this pipeline has published one aggregated dist
-          # release it collapses to consuming it, and works the same against
-          # an airgapped mirror:
-          #   export FORGE_DIST_MIRROR=https://github.com/alexandremahdhaoui/forge-self-factory/releases/latest/download
-          #   forge-factory sync --config forge-factory.yaml --root .
-          #   echo "$(pwd)/.forge/bin" >> "$GITHUB_PATH"
+
+      - name: Save the toolchain
+        if: steps.toolchain-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/go/bin
+            ~/.cache/go-build
+          key: toolchain-${{ runner.os }}-${{ steps.toolchain-key.outputs.key }}
 
       - name: Publish the release
         env:
