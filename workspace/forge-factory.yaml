@@ -51,6 +51,17 @@ engines:
   - alias: go
     engine: forge://github.com/alexandremahdhaoui/forge-factory/cmd/factory-lang-go
 
+  # The default fetch and install engines, and the archive provider that
+  # serves uv: forge-register's unread-fields gate runs its checker under
+  # `uv run`, and the image carries no uv (run 89). Declared exactly as
+  # golden declares them.
+  - alias: fetch
+    engine: forge://github.com/alexandremahdhaoui/forge-factory/cmd/factory-fetch
+  - alias: install
+    engine: forge://github.com/alexandremahdhaoui/forge-factory/cmd/factory-install
+  - alias: uv
+    engine: forge://github.com/alexandremahdhaoui/forge-factory/cmd/factory-runtime-archive
+
 # The container the pipeline's jobs run in, resolved from this factory's
 # own register like golden resolves it from theirs. Sync writes the full
 # reference into the generated .forge/toolchain-image and the pipeline
@@ -81,6 +92,12 @@ toolchain:
     - name: golangci-lint
       module: github.com/golangci/golangci-lint/v2/cmd/golangci-lint
       version: v2.13.1
+
+  # What a member's own gates need beyond Go: forge-register's
+  # unread-fields walks its captured records under `uv run`. The version
+  # golden adopted; provisioned into the store on the first clone.
+  runtimes:
+    uv: { version: "0.8.17" }
 
 state:
   engine: forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-state-git
