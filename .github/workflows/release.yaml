@@ -17,7 +17,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/alexandremahdhaoui/forge:v0.45.68
+      image: ghcr.io/alexandremahdhaoui/forge:v0.45.69
     steps:
       - uses: actions/setup-go@v7
         with:
