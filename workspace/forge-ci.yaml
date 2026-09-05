@@ -100,6 +100,15 @@ engines:
           (cd forge-ci && go install ./cmd/...)
           (cd forge-register && go install ./cmd/...)
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          # forge's own suites run forge's engines from this checkout, the
+          # way forge's .envrc has every developer run them: a checkout's
+          # forge is labelled by git describe, and an engine resolved by
+          # that label through the proxy is a version that does not exist
+          # (run 93). Run-local resolves forge://<engine> to `go run
+          # ./cmd/<engine>` here, so every member tests the engines of the
+          # commit under test, not the image's.
+          echo "FORGE_RUN_LOCAL_ENABLED=true" >> "$GITHUB_ENV"
+          echo "FORGE_RUN_LOCAL_BASEDIR=$PWD/forge" >> "$GITHUB_ENV"
         # What the script installs, cached across the jobs of a run under
         # the members' shas: five jobs compile the toolchain once.
         toolchainCachePaths: ["~/go/bin", "~/.cache/go-build"]
@@ -266,6 +275,12 @@ targets:
   - alias: forge-unit-nonroot
     forge: test run unit-nonroot
     in: [forge]
+  # forge's e2e runner execs ./build/bin/forge-e2e in two of its cases, and
+  # `test run <stage>` builds nothing. One entry, named: the whole build
+  # would drag in the two container entries that want a daemon.
+  - alias: forge-build-e2e-runner
+    forge: build forge-e2e
+    in: [forge]
   - alias: forge-e2e
     forge: test run e2e
     in: [forge]
@@ -325,6 +340,7 @@ stages:
           - forge-lint
           - forge-unit
           - forge-unit-nonroot
+          - forge-build-e2e-runner
           - forge-e2e
           - forge-e2e-decl
           - forge-e2e-stub
