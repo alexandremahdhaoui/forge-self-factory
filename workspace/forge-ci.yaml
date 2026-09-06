@@ -329,10 +329,12 @@ targets:
     forge: test run publish-members
     in: [forge-self-register]
 
-  # Cross-build every toolchain command for the distribution: CGO off,
-  # linux amd64+arm64, stamped with the revision through FORGE_CI_REVISION.
+  # Build every toolchain command for every platform its build entry
+  # declares: the entry's platforms: is the declaration, forge build builds
+  # all of them, and frozen proves the recorded lock rather than repairing
+  # it. The revision reaches the binaries through FORGE_CI_REVISION.
   - alias: build-artifacts
-    forge: test run build-artifacts
+    forge: build --frozen
     in: [forge, forge-ci, forge-factory, forge-register]
 
   # Assemble the toolchain image from what build-artifacts cross-built. It
