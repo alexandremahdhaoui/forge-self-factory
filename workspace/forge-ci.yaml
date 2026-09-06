@@ -285,48 +285,60 @@ targets:
   # as the repo names them. The pipeline ran unit alone in two of the four
   # repos, so a release shipped executables that no gate had seen.
   - alias: test-all
-    forge: test-all
+    binary: forge
+    args: [test-all]
     in: [forge-ci, forge-factory, forge-register]
 
   # forge's test-all wants a kind cluster (integration) and a container
   # daemon (the container-build entries its `generated` regenerates), and
   # this runner has neither. Every other stage it declares, by name.
   - alias: forge-lint-tags
-    forge: test run lint-tags
+    binary: forge
+    args: [test, run, lint-tags]
     in: [forge]
   - alias: forge-lint-license
-    forge: test run lint-license
+    binary: forge
+    args: [test, run, lint-license]
     in: [forge]
   - alias: forge-lint
-    forge: test run lint
+    binary: forge
+    args: [test, run, lint]
     in: [forge]
   - alias: forge-unit
-    forge: test run unit
+    binary: forge
+    args: [test, run, unit]
     in: [forge]
   - alias: forge-unit-nonroot
-    forge: test run unit-nonroot
+    binary: forge
+    args: [test, run, unit-nonroot]
     in: [forge]
   # forge's e2e runner execs ./build/bin/forge-e2e in two of its cases, and
   # `test run <stage>` builds nothing. One entry, named: the whole build
   # would drag in the two container entries that want a daemon.
   - alias: forge-build-e2e-runner
-    forge: build forge-e2e
+    binary: forge
+    args: [build, forge-e2e]
     in: [forge]
   - alias: forge-e2e
-    forge: test run e2e
+    binary: forge
+    args: [test, run, e2e]
     in: [forge]
   - alias: forge-e2e-decl
-    forge: test run e2e-decl
+    binary: forge
+    args: [test, run, e2e-decl]
     in: [forge]
   - alias: forge-e2e-stub
-    forge: test run e2e-stub
+    binary: forge
+    args: [test, run, e2e-stub]
     in: [forge]
   - alias: forge-e2e-run
-    forge: test run e2e-run
+    binary: forge
+    args: [test, run, e2e-run]
     in: [forge]
 
   - alias: publish-revision
-    forge: test run publish-members
+    binary: forge
+    args: [test, run, publish-members]
     in: [forge-self-register]
 
   # Build every toolchain command for every platform its build entry
@@ -334,14 +346,16 @@ targets:
   # all of them, and frozen proves the recorded lock rather than repairing
   # it. The revision reaches the binaries through FORGE_CI_REVISION.
   - alias: build-artifacts
-    forge: build --frozen
+    binary: forge
+    args: [build, --frozen]
     in: [forge, forge-ci, forge-factory, forge-register]
 
   # Assemble the toolchain image from what build-artifacts cross-built. It
   # runs in the factory because that is the one place the whole workspace is
   # visible.
   - alias: build-container
-    forge: test run build-container
+    binary: forge
+    args: [test, run, build-container]
     in: [forge-self-factory]
 
 # Test, then build, then release. Stage order separates what must be proven
