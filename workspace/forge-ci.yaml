@@ -111,7 +111,8 @@ engines:
     spec:
       repo: alexandremahdhaoui/forge-self-factory
       dir: forge-self-factory
-      containerFile: .forge/toolchain-image
+      container:
+        file: .forge/toolchain-image
       setup:
         - uses: actions/setup-go@v7
           with:
@@ -135,17 +136,27 @@ engines:
           # commit under test, not the image's.
           echo "FORGE_RUN_LOCAL_ENABLED=true" >> "$GITHUB_ENV"
           echo "FORGE_RUN_LOCAL_BASEDIR=$PWD/forge" >> "$GITHUB_ENV"
-        # What the script installs, cached across the jobs of a run under
-        # the members' shas: five jobs compile the toolchain once.
-        toolchainCachePaths: ["~/go/bin", "~/.cache/go-build"]
+      # What every job restores before its bootstrap and saves after: the
+      # tool store, and what the toolchain script installs, keyed on the
+      # heads of the repos above so five jobs compile the toolchain once and
+      # a stage that writes into the register moves no key.
+      caches:
+        - name: tool-store
+          paths: ["~/.cache/forge"]
+          key: content
+        - name: toolchain
+          paths: ["~/go/bin", "~/.cache/go-build"]
+          key: repos
+      # What a stage built crosses to the stages after it as an Actions
+      # artifact, and here that is the image layout the build stage
+      # assembles: blobs that are already gzip, so packing them again spends
+      # a minute compressing nothing.
+      carry:
+        compression: none
       # One apply as jobs: self-reconcile, evaluate, then one per stage.
       # A stage's job runs its substages in the waves their `needs:` declare
       # and asks the promotion itself; the job of the stage after waits on
-      # it. What a stage built crosses to the stages after it as an Actions
-      # artifact: the image layout the build stage assembles is what the
-      # release stage pushes. Five jobs a run, and a failure shows the stage
-      # it happened in.
-      phases: true
+      # it. Five jobs a run, and a failure shows the stage it happened in.
       jobs: stage
       secrets:
         # Reads every toolchain member and pushes the state repo; the
@@ -164,11 +175,14 @@ engines:
             #
             # member-pushed is the trigger a toolchain repo sends on push, so
             # this costs nothing while nobody is pushing.
-          events: [member-pushed]
-          # A settle's own push must fire the superseding run, exactly as
-          # golden's does: without this, a regenerated workflow waited for
-          # the next member push to take effect.
-          pushBranches: [main]
+          # Quoted: a bare on is the boolean true to the YAML parser.
+          "on":
+            events: [member-pushed]
+            # A settle's own push must fire the superseding run, exactly as
+            # golden's does: without this, a regenerated workflow waited for
+            # the next member push to take effect.
+            push:
+              branches: [main]
           # A dispatched or scheduled run has no audience here: whoever caused
           # it is watching another repo's checks, or nobody typed it at all.
           reportFailure: true
