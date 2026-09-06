@@ -2,6 +2,25 @@
 
 ## Open
 
+- 2026-09-06: forge-ci and forge-register pin forge at
+  `v0.45.110-0.20260906204214-4ed45f35ccc1`, the pseudo-version of the
+  commit carrying the build contract, written verbatim in golden's factory
+  file as an interim. The circle it opens: this factory has no go.work,
+  so the runner compiles forge-ci against the forge its committed go.mod
+  pins, and the tag that would carry the contract is cut by this
+  pipeline's release, which gates on that compile. Close it properly by
+  declaring `languages: [go]` on the four toolchain members with a
+  `dependencies.go` block naming their direct requires (the union is about
+  thirty modules, forge's k8s and aws ones included), admitted into
+  forge-self-register by its pipeline against the real feed; sync then
+  writes go.work and the members build against each other. Until then a
+  forge change forge-ci needs is adopted after a release, and golden's
+  pin line goes the moment this pipeline releases and golden-register
+  publishes the version by proof.
+- 2026-09-06: the versioning policy scores `!:` as major and the build
+  contract landed as `feat!:` commits in forge and forge-ci, so the next
+  release this pipeline cuts is v1.0.0 unless `versioning.cap: v0` is set
+  first. A decision, not taken here.
 - External dependencies still resolve from committed go.mod files. Move
   them to register entries once forge-self-register carries go tracks.
 - forge's test stage runs every stage it declares except `integration`
