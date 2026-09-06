@@ -38,6 +38,27 @@ repos:
     url: git@github.com:alexandremahdhaoui/forge-self-factory.git
     ref: main
 
+# What a green run may release. Without this block the default is a patch
+# on every green run, and this pipeline writes two kinds of commit on its
+# own: `forge-ci: self reconcile` here whenever the image pin moves, and
+# `ci: index ...` in the register on every publish. A release moves the pin,
+# the moved pin re-renders the workflow, the re-render pushes, the push runs,
+# and the run releases again: forty-one identical releases, v0.45.68 to
+# v0.45.108, one every 33 minutes, with no member change (2026-09-05/06).
+# Both prefixes are ignored here, so a range holding nothing else skips at
+# evaluate and nothing is tagged. The vocabulary is golden's. unmatched is
+# patch, not error: an unprefixed member commit must never stop the
+# pipeline that builds the toolchain.
+versioning:
+  strategy: semantic
+  ignorePaths: ["/*.md"]
+  semantic:
+    major: ["!:", "BREAKING CHANGE"]
+    minor: ["feat:"]
+    patch: ["fix:", "perf:", "build:", "deps:", "refactor:"]
+    ignore: ["docs:", "chore:", "test:", "style:", "ci:", "generated:", "forge-ci:"]
+    unmatched: patch
+
 managers:
   - alias: local
     engine: "forge://github.com/alexandremahdhaoui/forge-ci/cmd/ci-manager-local"
@@ -70,7 +91,12 @@ engines:
   #
   # The jobs run in the published toolchain image, resolved from this
   # factory's own register into .forge/toolchain-image by sync, the same
-  # way golden's are. The image supplies `forge` for the first clone and
+  # way golden's are. That register is written by this pipeline's own
+  # release, so every release moves the pin and the next run's reconcile
+  # pushes a re-rendered workflow: one extra run per release, which skips
+  # at evaluate because the versioning block above ignores the reconcile
+  # commit. It was unbounded before that block existed.
+  # The image supplies `forge` for the first clone and
   # nothing else this pipeline relies on: setup-go and the toolchain script
   # stay, because every real step must run the four binaries built from the
   # checked-out members - that is the code under test. The seed this
@@ -221,6 +247,11 @@ engines:
     spec:
       repo: alexandremahdhaoui/forge-self-factory
       tokenEnv: FORGE_CI_GITHUB_TOKEN
+      # The register is written by this very release (publish-revision), so
+      # a version tag on it means nothing and its `ci: index` commits must
+      # not count as a change to release. It stays in repos: so the revision
+      # keeps pinning its sha.
+      ignoreRepos: [forge-self-register]
   # No assets glob: the build stage builds every command whose build entry
   # declares platforms:, each recorded as an artifact named
   # <name>_<os>_<arch>, and the release publishes exactly those records. A
