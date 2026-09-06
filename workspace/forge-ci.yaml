@@ -361,7 +361,11 @@ targets:
   # it. The revision reaches the binaries through FORGE_CI_REVISION.
   - alias: build-artifacts
     binary: forge
-    args: [build, --frozen]
+    # The distribution: what every entry declares platforms for, and
+    # nothing that declares none - a repo's own tools and fixtures stay
+    # home. Frozen, because the distribution is the one build that must be
+    # reproducible.
+    args: [build, --frozen, --platforms, "linux/amd64,linux/arm64"]
     in: [forge, forge-ci, forge-factory, forge-register]
 
   # Assemble the toolchain image from what build-artifacts cross-built. It
