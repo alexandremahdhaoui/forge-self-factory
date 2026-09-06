@@ -40,7 +40,7 @@ jobs:
       - name: Name the toolchain by the members it is built from
         id: toolchain-key
         run: |
-          echo "key=$(for d in */.git; do git -C "${d%/.git}" rev-parse HEAD; done | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "key=$(for d in forge forge-ci forge-factory forge-register forge-ci-spec forge-revision-spec forge-register-spec forge-self-register forge-self-factory; do git -C "$d" rev-parse HEAD; done | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       - name: Restore the toolchain
         id: toolchain-cache
