@@ -24,35 +24,28 @@ build:
   # forge-self declares no dependencies block, so nothing resolves from a
   # register. go install lands a cross build under GOPATH/bin/<os>_<arch>
   # and a native one directly in GOPATH/bin, so the copy tries both.
-  - name: git-lfs_linux_amd64
+  - name: git-lfs
     src: .
     dest: ./build/bin
     engine: forge://generic-builder
+    # One entry, every platform the image ships: generic-builder runs the
+    # command once per declared platform with FORGE_OS and FORGE_ARCH set,
+    # and records one binary per platform. A cross build lands as
+    # build/bin/git-lfs_<os>_<arch>, which is the file the record points at;
+    # the image reads the record and never the name.
+    platforms: [linux/amd64, linux/arm64]
     spec:
       command: sh
       args:
         - "-c"
         - >-
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0
+          GOOS="$FORGE_OS" GOARCH="$FORGE_ARCH" CGO_ENABLED=0
           go install github.com/git-lfs/git-lfs/v3@v3.8.0 &&
-          p="$(go env GOPATH)/bin/linux_amd64/git-lfs" &&
+          p="$(go env GOPATH)/bin/${FORGE_OS}_${FORGE_ARCH}/git-lfs" &&
           { [ -f "$p" ] || p="$(go env GOPATH)/bin/git-lfs"; } &&
-          install -D -m 0755 "$p" build/bin/git-lfs_linux_amd64
-
-  - name: git-lfs_linux_arm64
-    src: .
-    dest: ./build/bin
-    engine: forge://generic-builder
-    spec:
-      command: sh
-      args:
-        - "-c"
-        - >-
-          GOOS=linux GOARCH=arm64 CGO_ENABLED=0
-          go install github.com/git-lfs/git-lfs/v3@v3.8.0 &&
-          p="$(go env GOPATH)/bin/linux_arm64/git-lfs" &&
-          { [ -f "$p" ] || p="$(go env GOPATH)/bin/git-lfs"; } &&
-          install -D -m 0755 "$p" build/bin/git-lfs_linux_arm64
+          out="build/bin/git-lfs_${FORGE_OS}_${FORGE_ARCH}" &&
+          { [ "$FORGE_PLATFORM" != "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" ] || out="build/bin/git-lfs"; } &&
+          install -D -m 0755 "$p" "$out"
 
   # The toolchain image: every command the members cross-built, on a base,
   # so a CI job runs the toolchain instead of building it. That is what
@@ -67,6 +60,9 @@ build:
     src: .
     dest: ./build/images
     engine: forge://container-build-simple
+    # The platforms assembled, one manifest each in the index: the same
+    # declaration every build entry carries.
+    platforms: [linux/amd64, linux/arm64]
     spec:
       # glibc, a real shell, and git.
       #
@@ -92,25 +88,18 @@ build:
       # is exactly what full buildpack-deps exists to add over -scm.
       base: buildpack-deps:stable
       binDir: /usr/local/bin
-      platforms: [linux/amd64, linux/arm64]
-      # What the dist stage cross-built, in every member. Each build entry
-      # names its own dest:, and every one of them is build/bin - the "dist"
-      # in the stage name is what it is FOR, not where it lands.
-      #
-      # A glob that matches nothing fails the build, so a member that
-      # stopped producing binaries is loud rather than an image quietly
-      # missing a tool.
+      # What goes into the layer, by record: each entry is a member
+      # repository, and every binary its artifact store carries for one of
+      # the platforms above lands on that platform under its artifact name.
+      # This factory is first, for git-lfs. Nothing is parsed out of a file
+      # name, and a member that recorded nothing for a platform fails the
+      # build loud rather than an image quietly missing a tool.
       from:
-        - "./build/bin/git-lfs_linux_amd64"
-        - "./build/bin/git-lfs_linux_arm64"
-        - "../forge/build/bin/*_linux_amd64"
-        - "../forge/build/bin/*_linux_arm64"
-        - "../forge-ci/build/bin/*_linux_amd64"
-        - "../forge-ci/build/bin/*_linux_arm64"
-        - "../forge-factory/build/bin/*_linux_amd64"
-        - "../forge-factory/build/bin/*_linux_arm64"
-        - "../forge-register/build/bin/*_linux_amd64"
-        - "../forge-register/build/bin/*_linux_arm64"
+        - "."
+        - "../forge"
+        - "../forge-ci"
+        - "../forge-factory"
+        - "../forge-register"
       labels:
         org.opencontainers.image.source: https://github.com/alexandremahdhaoui/forge-self-factory
         org.opencontainers.image.description: The forge toolchain. Every command, on debian.
@@ -128,9 +117,9 @@ test:
   # substage fans out to.
   #
   # It builds every artifact, not `toolchain` alone: the image's from:
-  # globs read this repo's own build/bin, and naming one artifact skipped
-  # the git-lfs entries that feed it - run 641e4ae6d312 died on
-  # "a from glob matched nothing" exactly that way.
+  # reads this repo's own records, and naming one artifact skipped the
+  # git-lfs entry that feeds it - run 641e4ae6d312 died on "a from glob
+  # matched nothing" exactly that way.
   - name: build-container
     runner: forge://generic-test-runner
     spec:
