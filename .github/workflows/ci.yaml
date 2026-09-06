@@ -27,6 +27,8 @@ concurrency:
 jobs:
   self-reconcile:
     name: Reconcile CI resources
+    outputs:
+      outcome: ${{ steps.phase.outputs.outcome }}
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/alexandremahdhaoui/forge:v0.45.108
@@ -95,7 +97,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGE_CI_GITHUB_TOKEN: ${{ secrets.FORGE_CI_GITHUB_TOKEN }}
         run: |
-          forge-ci apply --config forge-ci.yaml --root . --phase self-reconcile
+          out=$(forge-ci apply --config forge-ci.yaml --root . --phase self-reconcile)
+          printf '%s\n' "$out"
+          echo "outcome=$(printf '%s\n' "$out" | sed -n 's/^self-reconcile: //p' | tail -n 1)" >> "$GITHUB_OUTPUT"
 
       - name: Name the tool store by its content
         id: tool-store-key
@@ -133,6 +137,7 @@ jobs:
   evaluate:
     name: Evaluate next steps
     needs: [self-reconcile]
+    if: needs.self-reconcile.outputs.outcome == 'converged'
     outputs:
       outcome: ${{ steps.phase.outputs.outcome }}
       revision: ${{ steps.phase.outputs.revision }}
