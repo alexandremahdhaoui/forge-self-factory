@@ -51,6 +51,12 @@ repos:
 # pipeline that builds the toolchain.
 versioning:
   strategy: semantic
+  # The ceiling. Every bump stays under v0: a `!:` range drops to a minor
+  # instead of crossing to v1, and a last tag already past the cap fails the
+  # release loud. Set once forge-self cut v1.0.0 from `feat!:` commits under
+  # a policy that had no ceiling declared (2026-09-06); leaving v0 is a
+  # decision that changes this line, never an accident of a commit subject.
+  cap: v0
   ignorePaths: ["/*.md"]
   semantic:
     major: ["!:", "BREAKING CHANGE"]
