@@ -362,16 +362,16 @@ targets:
     in: [forge-self-register]
 
   # Build every toolchain command for every platform its build entry
-  # declares: the entry's platforms: is the declaration, forge build builds
-  # all of them, and frozen proves the recorded lock rather than repairing
-  # it. The revision reaches the binaries through FORGE_CI_REVISION.
+  # declares. The entry's platforms: is the whole declaration and forge
+  # builds all of them; a bare build carries no flag, because a flag here
+  # put policy into this line that belonged in forge.yaml (the --platforms
+  # filter skipped golden-typescript's install-deps and shipped an
+  # executable with no node_modules). Frozen is forge.yaml's `frozen:`,
+  # default true, so the lock is proved and never repaired. The revision
+  # reaches the binaries through FORGE_CI_REVISION.
   - alias: build-artifacts
     binary: forge
-    # The distribution: what every entry declares platforms for, and
-    # nothing that declares none - a repo's own tools and fixtures stay
-    # home. Frozen, because the distribution is the one build that must be
-    # reproducible.
-    args: [build, --frozen, --platforms, "linux/amd64,linux/arm64"]
+    args: [build]
     in: [forge, forge-ci, forge-factory, forge-register]
 
   # Assemble the toolchain image from what build-artifacts cross-built. It
