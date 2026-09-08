@@ -2,25 +2,24 @@
 
 ## Open
 
-- 2026-09-06: forge-ci and forge-register pin forge at
-  `v0.45.110-0.20260906204214-4ed45f35ccc1`, the pseudo-version of the
-  commit carrying the build contract, written verbatim in golden's factory
-  file as an interim. The circle it opens: this factory has no go.work,
-  so the runner compiles forge-ci against the forge its committed go.mod
-  pins, and the tag that would carry the contract is cut by this
-  pipeline's release, which gates on that compile. Close it properly by
-  declaring `languages: [go]` on the four toolchain members with a
-  `dependencies.go` block naming their direct requires (the union is about
-  thirty modules, forge's k8s and aws ones included), admitted into
-  forge-self-register by its pipeline against the real feed; sync then
-  writes go.work and the members build against each other. Until then a
-  forge change forge-ci needs is adopted after a release, and golden's
-  pin line goes the moment this pipeline releases and golden-register
-  publishes the version by proof.
-- 2026-09-06: the versioning policy scores `!:` as major and the build
-  contract landed as `feat!:` commits in forge and forge-ci, so the next
-  release this pipeline cuts is v1.0.0 unless `versioning.cap: v0` is set
-  first. A decision, not taken here.
+- 2026-09-08, closed: the interim pseudo-version pin is gone. This
+  pipeline released v0.46.0 (revision f1e614159919) under `versioning.cap:
+  v0`, golden-register carries it by proof on all five internal tracks,
+  and every generated go.mod in the fleet renders from that track. What
+  remains open from the same entry: this factory still declares no
+  `languages`/`dependencies.go` block, so its four members' go.mod files
+  are committed by hand (blocked on forge-self-register carrying go
+  tracks, which needs the vulnerability feed).
+- 2026-09-06, decided 2026-09-07: `versioning.cap: v0` is set. The
+  policy scored `feat!:` as major and cut v1.0.0 and v1.0.1 before the cap
+  was declared; both tags and releases are deleted and both registers'
+  `/1.json` tracks retracted. Leftovers that no pipeline can clean and a
+  human must: the ghcr image tags `v1.0.0` and `v1.0.1` (the token has no
+  `packages` scope), the state repo's `releases/f2a538c2a0a1.json`,
+  `releases/by-tag/v1.0.0.json` and the v1.0.1 pair (inert unless those
+  exact revisions re-run), and the Go module proxy, which serves v1.0.x
+  forever - the reason every go.mod had to move off it and none may go
+  back.
 - External dependencies still resolve from committed go.mod files. Move
   them to register entries once forge-self-register carries go tracks.
 - forge's test stage runs every stage it declares except `integration`
