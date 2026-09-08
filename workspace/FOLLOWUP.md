@@ -36,6 +36,40 @@
   belongs with the cross-register propagation study.
 
 ## Decided
+- 2026-09-08: this factory releases forge-dev-codegen. Nothing did.
+  Every golden language repo names its engines by module path - the
+  logging, telemetry and resilience generators, the four cli cells, the
+  three rest cells - and with no tag they resolved only from a sibling
+  checkout, so no consumer outside golden's own workspace could use
+  them. It is toolchain, so the toolchain factory versions it: a member
+  and a pipeline repo here, and a golden pipeline repo too, because
+  golden's canary runs its cobra demo and a target may only name a
+  pipeline repo. golden keeps it in ignoreRepos, so one factory tags it.
+  Its own unit stage cannot run anywhere: those cases drive cargo
+  against a sibling checkout named songe-common, which is a member of no
+  factory. Its lint runs here; the unit gate waits on that checkout
+  being declared somewhere.
+- 2026-09-08: profile: was folded into kind:. An engine declared
+  `kind: mcp-server` plus `profile: builder`, two keys for one question,
+  and the profile decided the tools while the kind decided the program.
+  kind now names the contract - builder, test-runner, testenv-subengine,
+  dependency-detector - and mcp-server keeps its own layout.tools. A
+  contract kind that also declares tools is refused. profile: is still
+  read so a checkout written before the fold generates, and it is
+  refused once every repo has moved.
+- 2026-09-08: an engine answers its own kind over config-validate.
+  Nothing reads it yet; the callers that today repeat a type key beside
+  every use of an engine are what it is for.
+- 2026-09-08: the generated gate starts without an artifact store.
+  Found by the fold: the freshness rule records the inputs a generator
+  read and the output it wrote, and not the generator between them, so
+  a changed template left every engine's committed code stale while
+  every digest still matched. The build skipped, and the gate that
+  exists to catch exactly this passed. Clearing the store makes the
+  comparison against what the generator emits today. The deeper fix -
+  the generated output depending on its generator - is not done: it
+  needs the tool's identity in the record, and for an engine run from
+  source there is no binary to hash. A decision to bring back.
 
 - 2026-09-06: the pipeline declares a semantic versioning policy that
   ignores `ci:` and `forge-ci:` commits, and `release-artifacts` ignores
