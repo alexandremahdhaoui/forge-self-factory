@@ -1,6 +1,5 @@
 name: forge-self
 
-artifactStorePath: .forge-ci-self/artifact-store.yaml
 
 # Every toolchain member is listed so a minted revision pins each member's
 # sha. The publish step in forge-self-register reads that record: it is what
