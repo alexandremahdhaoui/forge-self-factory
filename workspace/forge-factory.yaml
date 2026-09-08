@@ -32,6 +32,14 @@ repos:
   - name: forge-register-spec
     url: git@github.com:alexandremahdhaoui/forge-register-spec.git
 
+  # The codegen toolchain: the cells and concern generators every golden
+  # repo names by module path. It is a golden workspace member and golden
+  # builds one binary of it for a conformance suite, but golden does not
+  # version it - the toolchain factory does, so a consumer can resolve
+  # those engines by version instead of only from a sibling checkout.
+  - name: forge-dev-codegen
+    url: git@github.com:alexandremahdhaoui/forge-dev-codegen.git
+
   - name: forge-self-factory
     url: git@github.com:alexandremahdhaoui/forge-self-factory.git
 

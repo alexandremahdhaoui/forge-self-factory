@@ -33,6 +33,13 @@ repos:
     ref: main
   # The factory itself: the aggregated dist release is created here, and a
   # minted revision pins the workspace files too.
+  # Released here because nothing else released it: every golden language
+  # repo names its engines by module path, and with no tag they resolved
+  # only from a sibling checkout.
+  - name: forge-dev-codegen
+    url: git@github.com:alexandremahdhaoui/forge-dev-codegen.git
+    ref: main
+
   - name: forge-self-factory
     url: git@github.com:alexandremahdhaoui/forge-self-factory.git
     ref: main
@@ -308,6 +315,16 @@ targets:
     args: [test-all]
     in: [forge-ci, forge-factory, forge-register]
 
+  # forge-dev-codegen's lint alone. Its unit stage drives cargo against a
+  # sibling checkout named songe-common, which is a member of no factory,
+  # so those cases fail wherever that checkout is absent - which is every
+  # runner. Releasing a repo whose own unit gate cannot run is recorded in
+  # FOLLOWUP; running the gate that can run is the part that is honest.
+  - alias: codegen-lint
+    binary: forge
+    args: [test, run, lint]
+    in: [forge-dev-codegen]
+
   # forge's test-all wants a kind cluster (integration) and a container
   # daemon (the container-build entries its `generated` regenerates), and
   # this runner has neither. Every other stage it declares, by name.
@@ -405,6 +422,7 @@ stages:
         # after the three test-alls that need nothing of forge's own tree.
         targets:
           - test-all
+          - codegen-lint
           - forge-lint-tags
           - forge-lint-license
           - forge-lint
